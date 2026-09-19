@@ -1,0 +1,203 @@
+[
+  {
+    "name": "Nginx",
+    "categories": ["web-server"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "nginx(?:/([0-9.]+))?", "version": 1, "weight": 90 }
+    ]
+  },
+  {
+    "name": "Apache",
+    "categories": ["web-server"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "Apache(?:/([0-9.]+))?", "version": 1, "weight": 90 }
+    ]
+  },
+  {
+    "name": "Microsoft IIS",
+    "categories": ["web-server"],
+    "implies": ["ASP.NET"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "Microsoft-IIS(?:/([0-9.]+))?", "version": 1, "weight": 90 }
+    ]
+  },
+  {
+    "name": "LiteSpeed",
+    "categories": ["web-server"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "LiteSpeed", "weight": 90 },
+      { "type": "header", "name": "x-litespeed-cache", "pattern": ".", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Caddy",
+    "categories": ["web-server"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "Caddy", "weight": 90 }
+    ]
+  },
+  {
+    "name": "Cloudflare",
+    "categories": ["cdn", "waf"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "cloudflare", "weight": 85 },
+      { "type": "header", "name": "cf-ray", "pattern": ".", "weight": 85 },
+      { "type": "cookie", "pattern": "^__cf(?:duid|_bm|uid)", "weight": 60 }
+    ]
+  },
+  {
+    "name": "Amazon CloudFront",
+    "categories": ["cdn"],
+    "implies": ["Amazon Web Services"],
+    "matchers": [
+      { "type": "header", "name": "x-amz-cf-id", "pattern": ".", "weight": 85 },
+      { "type": "header", "name": "via", "pattern": "cloudfront", "weight": 75 },
+      { "type": "header", "name": "server", "pattern": "CloudFront", "weight": 80 }
+    ]
+  },
+  {
+    "name": "Amazon Web Services",
+    "categories": ["hosting"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "AmazonS3", "weight": 85 },
+      { "type": "header", "name": "x-amz-request-id", "pattern": ".", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Fastly",
+    "categories": ["cdn"],
+    "matchers": [
+      { "type": "header", "name": "x-served-by", "pattern": "cache-", "weight": 60 },
+      { "type": "header", "name": "x-fastly-request-id", "pattern": ".", "weight": 85 },
+      { "type": "header", "name": "via", "pattern": "varnish", "weight": 40 }
+    ]
+  },
+  {
+    "name": "Akamai",
+    "categories": ["cdn"],
+    "matchers": [
+      { "type": "header", "name": "x-akamai-transformed", "pattern": ".", "weight": 85 },
+      { "type": "header", "name": "server", "pattern": "AkamaiGHost", "weight": 85 }
+    ]
+  },
+  {
+    "name": "Varnish",
+    "categories": ["cache"],
+    "matchers": [
+      { "type": "header", "name": "x-varnish", "pattern": ".", "weight": 85 },
+      { "type": "header", "name": "via", "pattern": "varnish(?:/([0-9.]+))?", "version": 1, "weight": 60 }
+    ]
+  },
+  {
+    "name": "Vercel",
+    "categories": ["hosting"],
+    "matchers": [
+      { "type": "header", "name": "x-vercel-id", "pattern": ".", "weight": 90 },
+      { "type": "header", "name": "server", "pattern": "Vercel", "weight": 85 }
+    ]
+  },
+  {
+    "name": "Netlify",
+    "categories": ["hosting"],
+    "matchers": [
+      { "type": "header", "name": "x-nf-request-id", "pattern": ".", "weight": 90 },
+      { "type": "header", "name": "server", "pattern": "Netlify", "weight": 85 }
+    ]
+  },
+  {
+    "name": "GitHub Pages",
+    "categories": ["hosting"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "GitHub\\.com", "weight": 85 },
+      { "type": "header", "name": "x-github-request-id", "pattern": ".", "weight": 85 }
+    ]
+  },
+  {
+    "name": "PHP",
+    "categories": ["language"],
+    "probes": ["/phpinfo.php"],
+    "matchers": [
+      { "type": "header", "name": "x-powered-by", "pattern": "PHP(?:/([0-9.]+))?", "version": 1, "weight": 90 },
+      { "type": "cookie", "pattern": "^PHPSESSID$", "weight": 70 },
+      { "type": "url-path", "pattern": "\\.php(?:$|\\?)", "weight": 50 }
+    ]
+  },
+  {
+    "name": "ASP.NET",
+    "categories": ["web-framework"],
+    "matchers": [
+      { "type": "header", "name": "x-aspnet-version", "pattern": "([0-9.]+)", "version": 1, "weight": 90 },
+      { "type": "header", "name": "x-powered-by", "pattern": "ASP\\.NET", "weight": 85 },
+      { "type": "cookie", "pattern": "^(?:ASP\\.NET_SessionId|\\.ASPXAUTH)$", "weight": 70 },
+      { "type": "body", "pattern": "__VIEWSTATE|__EVENTVALIDATION", "weight": 65 }
+    ]
+  },
+  {
+    "name": "Node.js",
+    "categories": ["runtime"],
+    "matchers": [
+      { "type": "header", "name": "x-powered-by", "pattern": "Express", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Express",
+    "categories": ["web-framework"],
+    "implies": ["Node.js"],
+    "matchers": [
+      { "type": "header", "name": "x-powered-by", "pattern": "Express", "weight": 90 }
+    ]
+  },
+  {
+    "name": "Django",
+    "categories": ["web-framework"],
+    "implies": ["Python"],
+    "probes": ["/admin/"],
+    "matchers": [
+      { "type": "cookie", "pattern": "^(?:csrftoken|django_language)$", "weight": 75 },
+      { "type": "body", "pattern": "csrfmiddlewaretoken", "weight": 65 },
+      { "type": "body", "pattern": "id=\"django-admin|/static/admin/css/base\\.css", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Flask",
+    "categories": ["web-framework"],
+    "implies": ["Python"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "Werkzeug(?:/([0-9.]+))?", "version": 1, "weight": 85 },
+      { "type": "cookie", "pattern": "^session$", "weight": 30 }
+    ]
+  },
+  {
+    "name": "Python",
+    "categories": ["language"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "(?:Werkzeug|gunicorn|uvicorn|Python)(?:/([0-9.]+))?", "version": 1, "weight": 70 }
+    ]
+  },
+  {
+    "name": "Ruby on Rails",
+    "categories": ["web-framework"],
+    "matchers": [
+      { "type": "header", "name": "x-powered-by", "pattern": "Phusion Passenger", "weight": 70 },
+      { "type": "cookie", "pattern": "^_[a-z0-9_]+_session$", "weight": 50 },
+      { "type": "body", "pattern": "csrf-param\"\\s+content=\"authenticity_token", "weight": 80 }
+    ]
+  },
+  {
+    "name": "Laravel",
+    "categories": ["web-framework"],
+    "implies": ["PHP"],
+    "matchers": [
+      { "type": "cookie", "pattern": "^(?:laravel_session|XSRF-TOKEN)$", "weight": 80 },
+      { "type": "body", "pattern": "name=\"_token\"", "weight": 45 }
+    ]
+  },
+  {
+    "name": "Spring",
+    "categories": ["web-framework"],
+    "matchers": [
+      { "type": "cookie", "pattern": "^JSESSIONID$", "weight": 55 },
+      { "type": "header", "name": "x-application-context", "pattern": ".", "weight": 80 }
+    ]
+  }
+]

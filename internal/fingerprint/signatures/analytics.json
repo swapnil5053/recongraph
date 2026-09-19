@@ -1,0 +1,120 @@
+[
+  {
+    "name": "Google Analytics",
+    "categories": ["analytics"],
+    "matchers": [
+      { "type": "script-src", "pattern": "google-analytics\\.com/(?:analytics|ga)\\.js|googletagmanager\\.com/gtag/js", "weight": 85 },
+      { "type": "body", "pattern": "\\bga\\('create'|gtag\\('config'", "weight": 60 }
+    ]
+  },
+  {
+    "name": "Google Tag Manager",
+    "categories": ["tag-manager"],
+    "matchers": [
+      { "type": "script-src", "pattern": "googletagmanager\\.com/gtm\\.js", "weight": 85 },
+      { "type": "body", "pattern": "googletagmanager\\.com/ns\\.html|dataLayer\\.push", "weight": 55 }
+    ]
+  },
+  {
+    "name": "Segment",
+    "categories": ["analytics"],
+    "matchers": [
+      { "type": "script-src", "pattern": "cdn\\.segment\\.(?:com|io)/analytics\\.js", "weight": 85 },
+      { "type": "body", "pattern": "analytics\\.load\\(", "weight": 50 }
+    ]
+  },
+  {
+    "name": "Hotjar",
+    "categories": ["analytics"],
+    "matchers": [
+      { "type": "script-src", "pattern": "static\\.hotjar\\.com", "weight": 85 },
+      { "type": "body", "pattern": "_hjSettings", "weight": 65 }
+    ]
+  },
+  {
+    "name": "Plausible",
+    "categories": ["analytics"],
+    "matchers": [
+      { "type": "script-src", "pattern": "plausible\\.io/js/", "weight": 90 }
+    ]
+  },
+  {
+    "name": "Matomo",
+    "categories": ["analytics"],
+    "matchers": [
+      { "type": "script-src", "pattern": "(?:matomo|piwik)\\.js", "weight": 85 },
+      { "type": "body", "pattern": "_paq\\.push", "weight": 65 }
+    ]
+  },
+  {
+    "name": "Sentry",
+    "categories": ["monitoring"],
+    "matchers": [
+      { "type": "script-src", "pattern": "browser\\.sentry-cdn\\.com|/sentry[.-]?([0-9.]+)?(?:\\.min)?\\.js", "version": 1, "weight": 80 },
+      { "type": "body", "pattern": "Sentry\\.init\\(|__SENTRY__", "weight": 65 }
+    ]
+  },
+  {
+    "name": "Stripe",
+    "categories": ["payment"],
+    "matchers": [
+      { "type": "script-src", "pattern": "js\\.stripe\\.com", "weight": 90 },
+      { "type": "body", "pattern": "Stripe\\((?:'|\")pk_(?:live|test)", "weight": 80 }
+    ]
+  },
+  {
+    "name": "reCAPTCHA",
+    "categories": ["captcha"],
+    "matchers": [
+      { "type": "script-src", "pattern": "(?:www\\.google\\.com|recaptcha\\.net)/recaptcha/", "weight": 90 },
+      { "type": "class", "pattern": "\\bg-recaptcha\\b", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Cloudflare Turnstile",
+    "categories": ["captcha"],
+    "implies": ["Cloudflare"],
+    "matchers": [
+      { "type": "script-src", "pattern": "challenges\\.cloudflare\\.com/turnstile", "weight": 90 },
+      { "type": "class", "pattern": "\\bcf-turnstile\\b", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Intercom",
+    "categories": ["support"],
+    "matchers": [
+      { "type": "script-src", "pattern": "widget\\.intercom\\.io|js\\.intercomcdn\\.com", "weight": 90 },
+      { "type": "body", "pattern": "window\\.intercomSettings", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Zendesk",
+    "categories": ["support"],
+    "matchers": [
+      { "type": "script-src", "pattern": "static\\.zdassets\\.com|zendesk\\.com/embeddable", "weight": 85 }
+    ]
+  },
+  {
+    "name": "Mailchimp",
+    "categories": ["marketing"],
+    "matchers": [
+      { "type": "script-src", "pattern": "chimpstatic\\.com|list-manage\\.com", "weight": 80 },
+      { "type": "body", "pattern": "list-manage\\.com/subscribe", "weight": 60 }
+    ]
+  },
+  {
+    "name": "Font Awesome",
+    "categories": ["font"],
+    "matchers": [
+      { "type": "body", "pattern": "font-?awesome(?:[/.-]([0-9.]+))?", "version": 1, "weight": 70 },
+      { "type": "class", "pattern": "\\bfa[srlbd]?\\s+fa-[a-z-]+", "weight": 50 }
+    ]
+  },
+  {
+    "name": "Google Fonts",
+    "categories": ["font"],
+    "matchers": [
+      { "type": "body", "pattern": "fonts\\.(?:googleapis|gstatic)\\.com", "weight": 80 }
+    ]
+  }
+]

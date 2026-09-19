@@ -1,0 +1,126 @@
+[
+  {
+    "name": "WordPress",
+    "categories": ["cms"],
+    "implies": ["PHP"],
+    "probes": ["/wp-admin/", "/wp-login.php", "/wp-json/"],
+    "matchers": [
+      { "type": "meta", "name": "generator", "pattern": "WordPress\\s*([0-9.]+)?", "version": 1, "weight": 80 },
+      { "type": "script-src", "pattern": "/wp-(?:content|includes)/", "weight": 60 },
+      { "type": "body", "pattern": "/wp-(?:content|includes)/", "weight": 40 },
+      { "type": "cookie", "pattern": "^wordpress_(?:logged_in|sec|test_cookie)", "weight": 70 },
+      { "type": "url-path", "pattern": "^/wp-(?:admin|json|content)/", "weight": 50 },
+      { "type": "header", "name": "link", "pattern": "/wp-json/", "weight": 50 }
+    ]
+  },
+  {
+    "name": "WooCommerce",
+    "categories": ["ecommerce"],
+    "implies": ["WordPress"],
+    "matchers": [
+      { "type": "script-src", "pattern": "/plugins/woocommerce/", "weight": 70 },
+      { "type": "body", "pattern": "woocommerce-(?:page|product|cart)", "weight": 50 },
+      { "type": "class", "pattern": "\\bwoocommerce\\b", "weight": 45 },
+      { "type": "cookie", "pattern": "^woocommerce_(?:cart_hash|items_in_cart)", "weight": 60 }
+    ]
+  },
+  {
+    "name": "Elementor",
+    "categories": ["page-builder"],
+    "implies": ["WordPress"],
+    "matchers": [
+      { "type": "script-src", "pattern": "/plugins/elementor/", "weight": 70 },
+      { "type": "class", "pattern": "\\belementor-(?:page|section|widget)", "weight": 50 },
+      { "type": "meta", "name": "generator", "pattern": "Elementor\\s*([0-9.]+)?", "version": 1, "weight": 70 }
+    ]
+  },
+  {
+    "name": "Drupal",
+    "categories": ["cms"],
+    "implies": ["PHP"],
+    "probes": ["/user/login", "/core/CHANGELOG.txt"],
+    "matchers": [
+      { "type": "meta", "name": "generator", "pattern": "Drupal\\s*([0-9.]+)?", "version": 1, "weight": 80 },
+      { "type": "header", "name": "x-generator", "pattern": "Drupal\\s*([0-9.]+)?", "version": 1, "weight": 80 },
+      { "type": "header", "name": "x-drupal-cache", "pattern": ".", "weight": 70 },
+      { "type": "body", "pattern": "drupal-settings-json|/sites/(?:default|all)/", "weight": 50 },
+      { "type": "script-src", "pattern": "/(?:core|sites/all)/misc/drupal\\.js", "weight": 70 }
+    ]
+  },
+  {
+    "name": "Joomla",
+    "categories": ["cms"],
+    "implies": ["PHP"],
+    "probes": ["/administrator/"],
+    "matchers": [
+      { "type": "meta", "name": "generator", "pattern": "Joomla!?\\s*([0-9.]+)?", "version": 1, "weight": 80 },
+      { "type": "script-src", "pattern": "/media/(?:jui|system)/js/", "weight": 60 },
+      { "type": "body", "pattern": "/components/com_(?:content|users)/", "weight": 45 }
+    ]
+  },
+  {
+    "name": "Ghost",
+    "categories": ["cms", "blog"],
+    "matchers": [
+      { "type": "meta", "name": "generator", "pattern": "Ghost\\s*([0-9.]+)?", "version": 1, "weight": 85 },
+      { "type": "body", "pattern": "ghost-(?:sdk|portal)", "weight": 45 },
+      { "type": "script-src", "pattern": "/(?:ghost|members)/api/", "weight": 50 }
+    ]
+  },
+  {
+    "name": "Shopify",
+    "categories": ["ecommerce"],
+    "matchers": [
+      { "type": "header", "name": "x-shopid", "pattern": ".", "weight": 85 },
+      { "type": "header", "name": "x-shopify-stage", "pattern": ".", "weight": 85 },
+      { "type": "script-src", "pattern": "cdn\\.shopify\\.com", "weight": 70 },
+      { "type": "body", "pattern": "Shopify\\.(?:theme|shop|routes)", "weight": 60 },
+      { "type": "cookie", "pattern": "^_shopify_", "weight": 60 }
+    ]
+  },
+  {
+    "name": "Magento",
+    "categories": ["ecommerce"],
+    "implies": ["PHP"],
+    "matchers": [
+      { "type": "cookie", "pattern": "^(?:frontend|X-Magento-Vary)", "weight": 60 },
+      { "type": "body", "pattern": "/(?:static|media)/version\\d+/frontend/|Magento_", "weight": 60 },
+      { "type": "script-src", "pattern": "/static/(?:version\\d+/)?frontend/", "weight": 55 }
+    ]
+  },
+  {
+    "name": "Squarespace",
+    "categories": ["website-builder"],
+    "matchers": [
+      { "type": "header", "name": "server", "pattern": "Squarespace", "weight": 85 },
+      { "type": "body", "pattern": "static\\.squarespace\\.com|Static\\.SQUARESPACE_CONTEXT", "weight": 75 }
+    ]
+  },
+  {
+    "name": "Wix",
+    "categories": ["website-builder"],
+    "matchers": [
+      { "type": "header", "name": "x-wix-request-id", "pattern": ".", "weight": 85 },
+      { "type": "meta", "name": "generator", "pattern": "Wix\\.com", "weight": 80 },
+      { "type": "script-src", "pattern": "static\\.parastorage\\.com", "weight": 65 }
+    ]
+  },
+  {
+    "name": "Webflow",
+    "categories": ["website-builder"],
+    "matchers": [
+      { "type": "meta", "name": "generator", "pattern": "Webflow", "weight": 85 },
+      { "type": "script-src", "pattern": "assets(?:-global)?\\.website-files\\.com", "weight": 70 },
+      { "type": "class", "pattern": "\\bw-(?:container|row|nav)\\b", "weight": 35 }
+    ]
+  },
+  {
+    "name": "HubSpot",
+    "categories": ["marketing", "cms"],
+    "matchers": [
+      { "type": "script-src", "pattern": "js\\.hs-(?:scripts|analytics)\\.com|hs-banner\\.com", "weight": 75 },
+      { "type": "meta", "name": "generator", "pattern": "HubSpot", "weight": 80 },
+      { "type": "cookie", "pattern": "^(?:hubspotutk|__hstc)$", "weight": 60 }
+    ]
+  }
+]
