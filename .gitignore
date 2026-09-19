@@ -1,0 +1,25 @@
+bin/
+dist/
+coverage.out
+*.test
+
+# The built binary at the repo root. Anchored with a leading slash on purpose:
+# a bare "recongraph" pattern also matches the cmd/recongraph/ directory and
+# silently excludes the entry point from the repository.
+/recongraph
+/recongraph.exe
+
+# Default crawl store, if RECONGRAPH_HOME points into the repo
+.recongraph/
+
+# Crawl outputs
+*.dot
+*.svg
+map.html
+*-nodes.csv
+*-edges.csv
+*-findings.csv
+
+.DS_Store
+.idea/
+.vscode/
