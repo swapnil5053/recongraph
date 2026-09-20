@@ -55,7 +55,20 @@ That helper is worth noting, because the standard library has a real ergonomic t
 
 ---
 
-## Decision 3 — Signatures are JSON, not YAML
+## Decision 3 — Hand-written rate limiter
+
+ADR-0001 §2 specified `golang.org/x/time/rate` for the per-host limiter. It is
+about forty lines of token bucket, and given decisions 1 and 2 there was no
+reason to add a dependency for it. Behaviour is unchanged: token bucket, burst,
+jitter, robots `Crawl-delay` override.
+
+One thing the hand-written version got wrong at first, caught by
+`TestLimiterPaces`: the original `reserve()` slept until a token was due but
+never decremented the balance, so the next caller found it already refilled and
+went straight through. Sustained throughput was double the configured rate.
+Consuming into a negative balance fixes it.
+
+## Decision 4 — Signatures are JSON, not YAML
 
 ADR-0001 sketched the signature database in YAML. It ships as JSON, embedded with `go:embed`, for one reason: YAML would have meant a parser dependency, and the schema is simple enough that JSON costs only some quotation marks. The structure, matcher types, weighting and implication cascade are unchanged from ADR-0001 §5.
 

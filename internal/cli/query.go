@@ -196,7 +196,7 @@ func queryExternal(g *sitegraph.Graph) error {
 		}
 		return list[i].host < list[j].host
 	})
-	fmt.Printf("%d third-party host(s) — every one of these is supply-chain surface:\n\n", len(list))
+	fmt.Printf("%d third-party host(s):\n\n", len(list))
 	for _, h := range list {
 		fmt.Printf("  %4d  %s\n", h.n, h.host)
 	}
@@ -275,8 +275,7 @@ func queryFindings(g *sitegraph.Graph, kind string) error {
 	return nil
 }
 
-// queryPathTo answers "how many clicks from the front door is this?" — an
-// exploitability statement a flat URL list cannot make.
+// queryPathTo answers "how many clicks from the front door is this".
 func queryPathTo(g *sitegraph.Graph, target string) error {
 	var dst *sitegraph.Node
 	for _, n := range g.Nodes() {
@@ -309,7 +308,7 @@ func queryPathTo(g *sitegraph.Graph, target string) error {
 		return nil
 	}
 	fmt.Printf("%s exists in the graph but is not reachable from any seed by following references.\n", dst.URL)
-	fmt.Println("That usually means it was found in a sitemap, a script, or a comment — which is itself the finding.")
+	fmt.Println("Usually that means a sitemap, a script, or a comment.")
 	return nil
 }
 
@@ -347,7 +346,7 @@ func queryLinksTo(g *sitegraph.Graph, target string) error {
 func queryComponents(g *sitegraph.Graph) error {
 	comps := g.Components()
 	fmt.Printf("%d weakly-connected component(s).\n", len(comps))
-	fmt.Println("More than one usually means several distinct applications share this surface.")
+	fmt.Println("More than one usually means several apps share this surface.")
 	fmt.Println()
 	for i, c := range comps {
 		if i >= 10 {

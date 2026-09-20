@@ -3,17 +3,17 @@
 - **Status:** Accepted, partially superseded by [ADR-0002](0002-persistence-and-dependencies.md) (storage backend, CLI framework, signature format)
 - **Date:** 2026-09-13
 - **Context:** Successor to `hakluke/hakrawler` (audited separately — see `AUDIT-hakrawler.md`)
-- **Decision owner:** Swapnil
+- **Author:** Swapnil Kumar
 
 ---
 
 ## Part A — Scope: keep vs rebuild
 
-### Confirmed: build clean-room, do not fork
+### Clean-room, not a fork
 
-The audit found 231 lines of real logic in one `package main` file, a 2022 pseudo-versioned Colly pin, and four defects. There is no code to inherit. Forking means starting from a repo whose every file you delete in commit #2, while carrying its history and its dependency choices.
+The audit found 231 lines of real logic in one `package main` file, a 2022 pseudo-versioned Colly pin, and four defects. There is nothing much to inherit, and a fork would carry its history and dependency choices for no benefit.
 
-**Decision:** new module, empty history, `README` section titled "Prior art and attribution" crediting hakrawler explicitly for the stdin-composability model and the crawl-loop shape. This is both more honest and less work than a fork. It also gives you a cleaner answer to "what did you write?" — *all of it*.
+**Decision:** new module, empty history, and a "Prior art" section in the README crediting hakrawler for the stdin-composability model and the crawl-loop shape.
 
 ### Keeping (as concept, rewritten)
 
@@ -24,25 +24,25 @@ The audit found 231 lines of real logic in one `package main` file, a 2022 pseud
 
 ### Rebuilding — confirmed, with one correction
 
-Your rebuild list is right. One correction, because it will come up in an interview and you should not be caught out by it:
+The rebuild list holds up, with one correction to my own assumption:
 
 > **"Link/asset discovery (proper HTML parser, not regex)"**
 
-hakrawler already uses a proper HTML parser — Colly → goquery → `x/net/html`. Regex appears only in its `-subs` scope filter, where it produces an actual scope-escape bug. So frame this as: *"the original parses HTML correctly but enforces scope with an unanchored regex you can walk it out of; I replaced string matching with structural URL comparison, and widened extraction from 3 selectors to ~15 plus passive content extraction."* That is the true and more impressive claim.
+hakrawler already uses a proper HTML parser: Colly → goquery → `x/net/html`. Regex appears only in its `-subs` scope filter, where it produces the scope-escape bug. So the accurate statement is that the original parses HTML correctly but enforces scope with an unanchored regex you can walk it out of. The work here is replacing string matching with structural URL comparison, and widening extraction from 3 selectors to ~15 plus passive content extraction.
 
 Everything else on the rebuild list stands: proper Go layout, bounded worker pool with backpressure, real HTTP client with rate limiting and retries, structured output system.
 
 ### Adding new — accepted, with three amendments
 
-**1. Add a fifth subcommand: `query`.** You proposed `crawl`, `diff`, `fingerprint`, `export`. But the entire thesis of ReconGraph is that the crawl produces a *queryable artifact*. If the only way to interrogate it is to open the SQLite file yourself, the thesis is unproven by the tool. `recongraph query --crawl <id> --orphans`, `--hubs`, `--external-hosts`, `--tech wordpress`, `--path-to /admin`, plus a `--sql` escape hatch. This is a small amount of code that makes the graph decision *visible*.
+**1. Add a fifth subcommand: `query`.** The original plan was `crawl`, `diff`, `fingerprint`, `export`. But the whole premise is that a crawl leaves a queryable artifact, and if the only way to interrogate it is to open the database by hand then the tool never demonstrates its own point. `query --orphans`, `--hubs`, `--external`, `--tech`, `--path-to`, plus a `--sql` escape hatch. Small amount of code.
 
-**2. `fingerprint` as a standalone subcommand is questionable.** Fingerprinting is a property of a fetched response; it should run inline during `crawl` and attach to nodes. A separate subcommand only makes sense as "fingerprint a single URL without crawling it" — worth keeping for that, but be clear it is a convenience wrapper, not a separate pipeline. Do not build two fingerprinting code paths.
+**2. `fingerprint` as a standalone subcommand is borderline.** Fingerprinting is a property of a fetched response, so it should run inline during `crawl` and attach to nodes. Keeping the subcommand only for "fingerprint one URL without crawling" is fine, but it has to be a thin wrapper. Two fingerprinting code paths would be a mistake.
 
-**3. SVG export: do not write a layout engine.** Graph layout is a genuinely hard problem (Sugiyama, force-directed) and it is not what you are demonstrating. Emit DOT as the primary graph format; for SVG, shell out to Graphviz `dot` if it is on `PATH` and emit a clear error with an install hint if not. Optionally add a self-contained HTML export with an embedded JS force-directed view — that gets you a shareable visual with zero external binary and looks far better in a portfolio README than an SVG. Budget zero engineering for layout algorithms.
+**3. SVG export: no layout engine.** Graph layout is a hard, solved problem and not what this project is about. Emit DOT as the primary graph format and shell out to Graphviz for SVG, with a clear error if `dot` is missing. A self-contained HTML export with a small embedded force-directed view covers the case where Graphviz is not installed. Zero engineering budget for layout algorithms.
 
 ### Deliberately out of scope for v1 — say this out loud
 
-- **Headless / JS-rendered crawling.** This is katana's moat and a large lift (browser lifecycle, resource limits, XHR interception). Deferring it is defensible; pretending you didn't consider it is not. Document it as ADR-0002 (future).
+- **Headless / JS-rendered crawling.** Large lift: browser lifecycle, resource limits, XHR interception. Deferred, and the README should say so rather than leave it implied.
 - **Passive source integration** (Wayback, CommonCrawl, VirusTotal). gospider does this; it is API plumbing, not architecture. Low signal for the effort.
 - **Distributed crawling.** No.
 
@@ -76,7 +76,7 @@ recongraph/
 └── docs/adr/
 ```
 
-**Rationale, and the honest bit:** `internal/` is the default. A package goes in `pkg/` only if you would accept a bug report about its API from a stranger. That is true of exactly one thing here — the graph model and its encoders, which someone might legitimately import to consume ReconGraph output. Everything else is implementation detail. Resist the urge to populate `pkg/` to look substantial; an interviewer who knows Go reads a fat `pkg/` as cargo-culting, and a lean one as judgment.
+`internal/` is the default. A package goes in `pkg/` only if I would accept a bug report about its API from a stranger, and that is true of exactly one thing here: the graph model and its encoders, which someone might import to consume ReconGraph output. Everything else is implementation detail.
 
 `cmd/recongraph/main.go` should be under 30 lines. All command logic in `internal/cli/`, so commands are unit-testable without spawning a process.
 
@@ -158,8 +158,6 @@ Per-host rate limiting lives **inside `fetch`, not in the pool**, as a `map[stri
 
 ## 3. Why a graph, not a flat URL list
 
-**This is the interview answer. Practise it.**
-
 A flat list answers one question: *what URLs exist?* A directed graph answers the question that actually matters in reconnaissance: *how is this application put together?*
 
 The model: `Node = {URL, kind ∈ (page, script, stylesheet, image, form-target, external, api, bucket), status, content-type, size, depth, content-hash, techs[]}`. `Edge = {src, dst, rel ∈ (href, script, stylesheet, img, iframe, form-action, redirect, js-endpoint), context}`.
@@ -167,15 +165,15 @@ The model: `Node = {URL, kind ∈ (page, script, stylesheet, image, form-target,
 Structure that a list physically cannot represent:
 
 - **In-degree ranking.** Pages linked from everywhere are nav/hubs; pages linked from exactly one place are usually the interesting ones. On a flat list every URL has equal weight.
-- **Orphans and islands.** Nodes reachable only via a script or a sitemap, never via an anchor, are the classic "forgotten admin panel" shape. You can only detect this if you know what links to what.
+- **Orphans and islands.** Nodes reachable only via a script or a sitemap, never via an anchor: the forgotten-admin-panel shape. Only detectable if you know what links to what.
 - **Shortest path to a sensitive node.** "`/admin` is three clicks from the homepage, through `/dashboard`" is an exploitability statement. A list can only say `/admin` exists.
 - **Connected components.** One domain often hosts several distinct applications; they show up as weakly-connected components with few edges between them. That is an architecture map, derived automatically.
 - **External fan-out.** Every third-party host loaded as a script is supply-chain surface. The graph gives you the count, the pages affected, and the exact injection points.
 - **Redirect chains** as first-class edges rather than a collapsed final URL.
 
-And the decisive one for your feature set: **diff over a graph is qualitatively different from diff over a set.** Set diff says *"3 URLs appeared, 1 disappeared."* Graph diff says *"the checkout page now references `api-v2.internal.corp`, and nothing links to `/legacy/upload` any more even though it still returns 200."* The second is a finding. The first is a changelog.
+And the decisive one: **diff over a graph is a different thing from diff over a set.** Set diff says *"3 URLs appeared, 1 disappeared."* Graph diff says *"the checkout page now references `api-v2.internal.corp`, and nothing links to `/legacy/upload` any more even though it still returns 200."* The second is a finding. The first is a changelog.
 
-**Costs, stated honestly** (an ADR that lists no downsides is marketing): memory grows with edges not just pages, and a large site is edge-heavy — hence `--max-pages`, `--max-queue`, and interning URL strings into integer node IDs at insert. Cycles mean every traversal needs a visited set. And a graph is over-engineering for the "just give me a URL list" use case — which is exactly why default stdout stays a plain URL stream and the graph is what's *persisted*, not what's *printed*.
+**Costs:** memory grows with edges not just pages, and a large site is edge-heavy — hence `--max-pages`, `--max-queue`, and interning URL strings into integer node IDs at insert. Cycles mean every traversal needs a visited set. And a graph is over-engineering for the "just give me a URL list" use case — which is exactly why default stdout stays a plain URL stream and the graph is what's *persisted*, not what's *printed*.
 
 ---
 
@@ -185,13 +183,13 @@ And the decisive one for your feature set: **diff over a graph is qualitatively 
 
 **Why not SQLite-during-crawl?** Every discovered link would become a synchronous write on the hot path, and SQLite's single-writer model would serialise the crawl behind disk I/O.
 
-**Why not in-memory-only, dumped at the end?** Nothing survives a crash, and diff mode is impossible.
+**Why not in-memory only, dumped at the end?** Nothing survives a crash.
 
 **The compromise:** builder accumulates and flushes every N nodes or T seconds inside one transaction. Crash or Ctrl-C loses at most one batch. Batched inserts in a single transaction are the difference between ~1k and ~100k rows/sec in SQLite; this is not a micro-optimisation, it is the whole reason the design works.
 
 ### Driver choice — a real tradeoff worth documenting
 
-Use **`modernc.org/sqlite`** (pure Go), not `mattn/go-sqlite3` (CGO). `mattn` is faster. But CGO breaks `CGO_ENABLED=0` static builds and makes cross-compilation to linux/darwin/windows-arm64 painful — and the entire distribution story for a Go recon tool is *"download one static binary, or `go install`, no dependencies."* Sacrificing raw insert speed to preserve single-binary cross-compilation is the correct trade for this tool. **Write that reasoning into the ADR verbatim; "I chose the slower library on purpose, here's why" is a strong signal.**
+Use **`modernc.org/sqlite`** (pure Go), not `mattn/go-sqlite3` (CGO). `mattn` is faster. But CGO breaks `CGO_ENABLED=0` static builds and makes cross-compilation to linux/darwin/windows-arm64 painful — and the entire distribution story for a Go recon tool is *"download one static binary, or `go install`, no dependencies."* Trading insert speed for single-binary cross-compilation is the right call for a tool whose whole distribution story is "download one file".
 
 ### Schema
 
@@ -215,7 +213,7 @@ Two `crawl_id`s in one database. Three classes, all expressible in SQL:
 - **changed** — same canonical URL, different `status_code`, `content_type`, `content_hash`, or tech set.
 - **restructured** — same node, different in/out edge set. This is the class no flat tool can report.
 
-**The load-bearing detail is URL canonicalisation.** Diff quality is *entirely* a function of it: lowercase scheme+host, strip default ports, resolve dot segments, drop fragments, sort query parameters, and strip a configurable session/tracking parameter list (`--strip-params`). Get this wrong and every crawl diffs as 100% changed. Put canonicalisation in `pkg/sitegraph`, and make it the most heavily unit-tested function in the repo — table-driven, 40+ cases. If an interviewer asks what was hardest, this is a better answer than the worker pool.
+**The load-bearing detail is URL canonicalisation.** Diff quality is almost entirely a function of it: lowercase scheme and host, strip default ports, resolve dot segments, drop fragments, sort query parameters, strip a configurable session/tracking list (`--strip-params`). Get it wrong and every crawl diffs as 100% changed. It lives in `pkg/sitegraph` and needs table-driven tests, 40+ cases.
 
 ---
 
@@ -238,17 +236,17 @@ Two `crawl_id`s in one database. Three classes, all expressible in SQL:
 
 **Matcher types:** response header, cookie name, `<meta name=generator>`, script `src` pattern, body regex, URL path, favicon hash. **Scoring:** weights sum per technology, report above a threshold with a confidence value; `implies` cascades (WordPress → PHP); version captured via a named capture group. Never report a boolean where you can report a confidence and the evidence string — "detected X because header Y matched Z" is what makes the output trustworthy.
 
-**Passive by default, active behind a flag.** Everything above except `probes` runs on responses the crawler already fetched — zero extra requests. Path probes (`/wp-admin/`, `/.git/HEAD`, `/server-status`) are extra requests to paths you were not linked to, which is a different legal and ethical posture. `--probe` opt-in, rate-limited through the same per-host limiter, with a hard per-host probe budget. **Making that a conscious, documented boundary is itself a design decision worth pointing at.**
+**Passive by default, active behind a flag.** Everything above except `probes` runs on responses the crawler already fetched — zero extra requests. Path probes (`/wp-admin/`, `/.git/HEAD`, `/server-status`) are extra requests to paths you were not linked to, which is a different legal and ethical posture. `--probe` opt-in, rate-limited through the same per-host limiter, with a hard per-host probe budget. That boundary is deliberate and should stay documented.
 
 **Fingerprints attach to nodes, not to the site.** A CDN-fronted marketing page and a Django admin under the same host are different nodes with different tech. Per-node fingerprints are what make `recongraph query --tech` and tech-drift diffing possible; a site-level verdict cannot do either.
 
-**Signature sourcing — check the licence.** Wappalyzer's dataset went proprietary in 2023, so do not copy it. `projectdiscovery/wappalyzergo` is MIT and can be a reference for schema shape. Hand-writing 30–40 solid signatures is a weekend and is genuinely defensible as your own work; importing a dataset with an unclear licence into a portfolio repo is a liability, not a shortcut.
+**Signature sourcing: check the licence.** Wappalyzer's dataset went proprietary in 2023, so it cannot be copied. `projectdiscovery/wappalyzergo` is MIT and fine as a reference for schema shape. Hand-writing 30-40 signatures is a weekend's work and avoids the question entirely.
 
 ---
 
 ## 6. Differentiation vs hakrawler, gospider, katana
 
-**Start by correcting your own brief.** Your plan lists technology fingerprinting as a novel feature. **Katana already ships technology detection (`-td`).** If you claim it as a differentiator in an interview and you're talking to someone who uses ProjectDiscovery tooling, you lose credibility instantly. Know this and get ahead of it.
+First, a correction to my own plan: it listed technology fingerprinting as a novel feature. **Katana already ships technology detection (`-td`).** It is table stakes, not a differentiator, and claiming otherwise in front of anyone who uses ProjectDiscovery tooling would be embarrassing.
 
 | | hakrawler | gospider | katana | **ReconGraph** |
 |---|---|---|---|---|
@@ -266,13 +264,11 @@ Two `crawl_id`s in one database. Three classes, all expressible in SQL:
 | **Diff across runs** | ✗ | ✗ | ✗ | **✓ nodes, edges, tech, content** |
 | **Queryable** | grep | grep | grep / jq | **✓ `query` subcommand + SQL** |
 
-### The one-sentence positioning
+### Positioning
 
-> *"katana is a better crawler than mine — it has headless rendering and real JS analysis. ReconGraph isn't competing on crawl coverage; it's competing on what you're left with afterwards. Every one of these tools emits a stream you grep once and throw away. ReconGraph produces a persisted, queryable graph of a target's web surface that you can diff against last month's."*
+Katana is a better crawler than this one: headless rendering, real JS analysis. ReconGraph is not competing on crawl coverage. All four tools emit a stream you grep once and discard; the gap is in the output model, and that is what this builds for.
 
-That framing is strong precisely **because** it concedes the crawling contest. Claiming to have out-crawled a ProjectDiscovery tool in a student project is not believable; identifying that all four tools share a blind spot in their *output model* and building for that gap is exactly the kind of judgment the question is probing for.
-
-The bottom three rows of that table are the entire project. Everything else is table stakes you need in order to be taken seriously.
+The bottom three rows of the table are the project. Everything above them is table stakes.
 
 ---
 
@@ -281,9 +277,9 @@ The bottom three rows of that table are the entire project. Everything else is t
 1. **Canonicalisation is the diff feature's single point of failure.** Under-normalise → everything looks changed; over-normalise → real changes vanish. Mitigation: exhaustive table-driven tests, `--strip-params` configurable, ship a `diff --explain` that shows the canonical forms it compared.
 2. **Graph memory on large targets.** Mitigation: integer node IDs with an interned URL table, `--max-pages` / `--max-queue` defaults set low (10k), explicit reporting when a budget truncates a crawl.
 3. **JS coverage gap is real.** Modern SPAs will make ReconGraph look weak against katana. Mitigation: be first to say it; regex endpoint extraction from `.js` bodies in v1 buys back a meaningful fraction for a day's work.
-4. **Ethics and legal.** Active probes and unthrottled crawling against hosts you don't own. Mitigation: `--respect-robots` **default on** (with a documented flag to disable — most recon tools default the other way; defaulting to polite is the more defensible choice for a public portfolio repo), conservative default rate limits, a clear README statement on authorised testing, and probes off by default.
-5. **Scope creep.** Five subcommands, four export formats, a signature DB, and a diff engine is already a lot. Sequence it: graph + crawl + JSON/DOT export first, and get that genuinely solid before SQLite; SQLite before diff; diff before fingerprinting. A finished three-feature tool beats a half-finished seven-feature one, and the graph alone already differentiates it.
-6. **Naming.** "ReconGraph" is unclaimed as far as this audit checked, but verify against pkg.go.dev and GitHub before committing to a module path — renaming a Go module after publishing is unpleasant.
+4. **Ethics and legal.** Active probes and unthrottled crawling against hosts I don't own. Mitigation: robots.txt respected by default with a documented flag to disable it, conservative rate limits, a README statement on authorised testing, and probes off by default.
+5. **Scope creep.** Five subcommands, four export formats, a signature database and a diff engine is a lot. Sequence: graph and crawl and JSON/DOT export first, solid, before storage; storage before diff; diff before fingerprinting. A finished three-feature tool beats a half-finished seven-feature one.
+6. **Naming.** Check "ReconGraph" against pkg.go.dev and GitHub before committing to a module path. Renaming a published Go module is unpleasant.
 
 ---
 
@@ -291,6 +287,6 @@ The bottom three rows of that table are the entire project. Everything else is t
 
 **Positive:** every audit defect is structurally prevented rather than patched — leaks by `context`, races by single-owner-graph, scope escape by structural comparison, silent loss by persistence. The layout is idiomatic and testable without a network. The graph model creates three features (diff, query, structural analysis) that no comparable Go tool has.
 
-**Negative:** substantially more code than hakrawler's 231 lines — realistically 3–5k. The `frontier`/`builder` split is more machinery than a simple `sync.WaitGroup` crawler needs, and is only justified by the graph-ownership and termination requirements; be ready to defend it on those grounds specifically. Pure-Go SQLite is slower than CGO. And no headless means known-weak SPA coverage.
+**Negative:** a lot more code than hakrawler's 231 lines, realistically 3-5k. The frontier/builder split is more machinery than a `sync.WaitGroup` crawler needs and is only justified by graph ownership and termination. Pure-Go SQLite is slower than CGO. No headless means weak SPA coverage.
 
-**Neutral:** Colly is dropped entirely. You get correctness and control; you also inherit the ~600 lines of fetch/queue/robots plumbing it was providing for free.
+**Neutral:** Colly is dropped entirely. That buys correctness and control, and costs the ~600 lines of fetch/queue/robots plumbing it was providing for free.
