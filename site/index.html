@@ -2,682 +2,361 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A web crawler that maps a site as a graph, saves every crawl, and diffs them.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ReconGraph</title>
+<meta name="description" content="A web crawler that maps a site as a graph, saves every crawl, and tells you what changed between them.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --ground: #0C0E0D;
-    --surface: #121513;
-    --well: #090B0A;
-    --line: rgba(230, 232, 226, 0.10);
-    --line-strong: rgba(230, 232, 226, 0.20);
-    --text: #E6E7E2;
-    --text-2: #A3A8A0;
-    --text-3: #6F746D;
-    --paper: #E7E8E2;
-    --ink: #15170F;
-    --ink-2: #4E5249;
-    --ink-line: rgba(21, 23, 15, 0.14);
-    --accent: #D99A2B;
-    --accent-ink: #8A5E12;
-    --add: #86B784;
-    --del: #D0776C;
-    --t-page: #8196B4;
-    --t-script: #C9A45A;
-    --t-style: #A08BC6;
-    --t-image: #6AA590;
-    --t-ext: #B98394;
-    --sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+:root{
+  --paper:#E6E8E2; --sheet:#F1F2EE; --ink:#1B1E1C; --ink-2:#4D534D; --rule:#A3A9A1; --faint:#C3C8C0;
+  --mark:#A8321F; --mark-ink:#FFFFFF;
+  --display:"Archivo",system-ui,sans-serif; --body:"Archivo",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#131614; --sheet:#1A1E1B; --ink:#DADFD8; --ink-2:#9AA299; --rule:#4A514B; --faint:#343A35;
+    --mark:#E2705A; --mark-ink:#131614;
   }
-  *, *::before, *::after { box-sizing: border-box; }
-  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
-  body { margin: 0; background: var(--ground); color: var(--text); font-family: var(--sans); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
-  a { color: inherit; }
-  ::selection { background: var(--accent); color: var(--ground); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
-  .page { overflow-x: clip; }
-  .wrap { max-width: 1160px; margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)); }
-  .mono { font-family: var(--mono); }
-  .label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--text-3); }
-  h1, h2, h3 { text-wrap: balance; margin: 0; }
-  h2 { font-size: clamp(28px, 3.6vw, 42px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
-  .lede { font-size: 17px; line-height: 1.6; color: var(--text-2); max-width: 60ch; margin: 16px 0 0; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.55 var(--body);font-stretch:100%}
+a{color:inherit;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--mark)}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+code,pre,.mono{font-family:var(--mono);font-size:14px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 
-  /* ---------- nav ---------- */
-  .nav { position: fixed; inset: 0 0 auto 0; z-index: 50; padding-top: env(safe-area-inset-top, 0px); background: rgba(12, 14, 13, 0.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-  .nav .wrap { display: flex; align-items: center; gap: 28px; height: 56px; }
-  .brand { font-family: var(--mono); font-size: 14px; font-weight: 500; text-decoration: none; color: var(--text); margin-right: auto; display: flex; align-items: center; gap: 10px; }
-  .brand svg { display: block; }
-  .nav a.link { font-size: 14px; color: var(--text-2); text-decoration: none; }
-  .nav a.link:hover { color: var(--text); }
-  .nav a.install { font-family: var(--mono); font-size: 13px; text-decoration: none; color: var(--ground); background: var(--accent); padding: 7px 14px; border-radius: 3px; }
-  .nav a.install:hover { background: var(--text); }
-  @media (max-width: 720px) { .nav a.opt { display: none; } .nav .wrap { gap: 18px; } }
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;padding:24px 0 0}
+.mark{font:700 18px/1 var(--display);font-stretch:122%;letter-spacing:.01em;text-decoration:none}
+.top nav{display:flex;gap:20px;font-size:14px}
+.top nav a{text-decoration:none;color:var(--ink-2)}
+.top nav a:hover{color:var(--mark)}
 
-  /* ---------- hero ---------- */
-  .hero { position: relative; height: 250vh; }
-  .stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
-  .rail { will-change: transform; }
-  .head { padding-top: 128px; }
-  .head .meta { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
-  .head h1 { margin-top: 18px; font-size: clamp(36px, 5.6vw, 68px); line-height: 1.02; font-weight: 600; letter-spacing: -0.04em; max-width: 15ch; }
-  .head p { margin: 20px 0 0; font-size: clamp(16px, 1.7vw, 18px); line-height: 1.6; color: var(--text-2); max-width: 54ch; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; align-items: stretch; }
-  .cmd { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; padding: 0 6px 0 16px; height: 46px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--surface); font-family: var(--mono); font-size: 13px; }
-  .cmd .prompt { color: var(--accent); flex: none; }
-  .cmd .txt { white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .cmd .txt::-webkit-scrollbar { display: none; }
-  .copy { flex: none; font-family: var(--mono); font-size: 12px; color: var(--text-2); background: transparent; border: 1px solid var(--line); border-radius: 2px; padding: 6px 10px; cursor: pointer; }
-  .copy:hover { color: var(--text); border-color: var(--line-strong); }
-  .ghost { display: inline-flex; align-items: center; gap: 8px; padding: 0 18px; height: 46px; border: 1px solid var(--line); border-radius: 3px; font-size: 14px; text-decoration: none; color: var(--text-2); }
-  .ghost:hover { color: var(--text); border-color: var(--line-strong); }
+/* intro */
+.intro{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px;align-items:end;padding:72px 0 40px}
+h1{font:650 60px/1.02 var(--display);font-stretch:112%;letter-spacing:-.02em;margin:0 0 24px;max-width:12ch}
+.lede{font-size:18px;color:var(--ink-2);max-width:46ch;margin:0 0 32px}
+.cmd{display:flex;align-items:stretch;max-width:100%;border:1px solid var(--ink);background:var(--sheet)}
+.cmd code{flex:1;min-width:0;padding:12px 14px;overflow-x:auto;white-space:nowrap}
+.cmd button{font:500 14px var(--body);border:0;border-left:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:0 16px;cursor:pointer}
+.cmd button:hover{background:var(--mark);color:var(--mark-ink)}
+.alt{font-size:14px;color:var(--ink-2);margin:12px 0 0}
 
-  .viz { position: relative; height: 100vh; height: 100svh; padding: 76px 0 52px; }
-  .term { position: absolute; left: 50%; top: 76px; transform: translateX(-50%); width: min(720px, calc(100% - 40px)); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
-  .term .bar { display: flex; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
-  .term .body { padding: 16px 18px 20px; font-family: var(--mono); font-size: 13px; line-height: 1.85; overflow-x: auto; }
-  .term .row { display: grid; grid-template-columns: 90px 1fr; gap: 12px; white-space: nowrap; }
-  .term .row .k { color: var(--text-3); }
-  .caret { display: inline-block; width: 8px; height: 15px; margin-left: 4px; vertical-align: -2px; background: var(--accent); animation: blink 1.1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  .graph { position: absolute; inset: 76px 20px 52px; margin: 0; display: flex; align-items: center; justify-content: center; }
-  .graph svg { width: 100%; height: 100%; display: block; overflow: visible; }
-  .graph .n-label { font-family: var(--mono); fill: #C8CCC4; }
-  .graph .c-label { font-family: var(--mono); fill: var(--text-3); letter-spacing: 0.08em; }
-  .legend { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; font-family: var(--mono); font-size: 11.5px; color: var(--text-3); padding-inline: 20px; }
-  .legend span { display: inline-flex; align-items: center; gap: 7px; }
-  .legend i { width: 8px; height: 8px; border-radius: 1px; display: inline-block; }
-  .legend i.o { background: transparent; border: 1.5px solid var(--accent); }
+/* title block */
+.tblock{border:1px solid var(--ink);background:var(--sheet);font-size:14px;border-collapse:collapse;width:100%}
+.tblock th,.tblock td{border:1px solid var(--rule);padding:7px 10px;text-align:left;vertical-align:top}
+.tblock th{font:500 12px/1.4 var(--body);font-stretch:112%;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);width:34%}
+.tblock td{font-variant-numeric:tabular-nums}
+.tblock caption{caption-side:bottom;text-align:left;font-size:12px;color:var(--ink-2);padding-top:8px}
 
-  /* reduced motion: no scroll-driven stage, everything in flow */
-  .hero.static { height: auto; }
-  .hero.static .stage { position: relative; height: auto; overflow: visible; }
-  .hero.static .viz { height: auto; padding: 48px 0 64px; }
-  .hero.static .term { display: none; }
-  .hero.static .graph { position: relative; inset: auto; height: min(62vw, 560px); }
-  .hero.static .legend { position: static; margin-top: 18px; }
+/* the sheet */
+.figure{margin:0 0 96px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:0;border:1px solid var(--ink);background:var(--sheet)}
+.sheet{display:block;width:100%;height:auto;padding:12px}
+.sheet .frame-o{fill:none;stroke:var(--ink);stroke-width:1.2}
+.sheet .frame-i{fill:none;stroke:var(--ink);stroke-width:.6}
+.sheet .tick{stroke:var(--ink);stroke-width:.6}
+.sheet .gref{font:500 11px var(--body);font-stretch:112%;fill:var(--ink-2);text-anchor:middle}
+.sheet .e{stroke:var(--faint);stroke-width:1}
+.sheet .n{fill:var(--ink)}
+.sheet .n.open{fill:var(--sheet);stroke:var(--ink);stroke-width:1.2}
+.sheet .n.ext{fill:var(--sheet);stroke:var(--ink);stroke-width:1.6}
+.sheet .lead{stroke:var(--mark);stroke-width:1.2}
+.sheet .pin{fill:var(--mark)}
+.sheet .pin-n{font:600 14px var(--body);fill:var(--mark-ink);text-anchor:middle}
+.key{border-left:1px solid var(--ink);padding:20px 18px;font-size:14px;display:flex;flex-direction:column;gap:20px}
+.key h2{font:600 12px/1.3 var(--body);font-stretch:112%;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:0 0 8px}
+.key ol{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.key li{display:grid;grid-template-columns:22px 28px 1fr;gap:6px;align-items:start}
+.pin-s{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--mark);color:var(--mark-ink);font:600 12px var(--body)}
+.gr{font:500 12px/20px var(--mono);color:var(--ink-2)}
+.legend{display:grid;gap:6px;color:var(--ink-2)}
+.legend span{display:flex;align-items:center;gap:10px}
+.legend svg{flex:none}
+.cap{grid-column:1/-1;border-top:1px solid var(--ink);padding:10px 18px;font-size:12px;color:var(--ink-2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 
-  /* ---------- light band ---------- */
-  .band { background: var(--paper); color: var(--ink); }
-  .band .label { color: var(--ink-2); }
-  .band .lede { color: var(--ink-2); }
-  .why { padding-block: clamp(96px, 13vh, 160px); }
-  .why .text { margin: 36px 0 0; font-size: clamp(24px, 3.4vw, 40px); line-height: 1.3; font-weight: 500; letter-spacing: -0.025em; max-width: 30ch; }
-  .why .text span { transition: color 240ms ease; }
-  .why .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 28px 40px; margin-top: 64px; padding-top: 28px; border-top: 1px solid var(--ink-line); }
-  .why .notes h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-  .why .notes p { margin: 6px 0 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
-  .why .notes code { font-family: var(--mono); font-size: 13px; }
+/* sections */
+section{padding:0 0 96px}
+.sh{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px;margin-bottom:32px}
+h2.big{font:650 32px/1.12 var(--display);font-stretch:112%;letter-spacing:-.015em;margin:0}
+.sh p{margin:0;color:var(--ink-2);max-width:60ch}
+.sh p+p{margin-top:12px}
 
-  /* ---------- query ---------- */
-  .query { padding-block: clamp(96px, 13vh, 160px); }
-  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 48px; }
-  @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
-  .card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); display: flex; flex-direction: column; }
-  .card header { padding: 22px 22px 18px; }
-  .card h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.015em; }
-  .card header p { margin: 6px 0 0; font-size: 14.5px; color: var(--text-2); max-width: 46ch; }
-  .out { margin: 0; flex: 1; padding: 16px 18px 18px; background: var(--well); border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12.5px; line-height: 1.8; color: #C8CCC4; overflow-x: auto; white-space: pre; border-radius: 0 0 4px 4px; }
-  .out .c { color: var(--text); }
-  .out .c::before { content: '$ '; color: var(--accent); }
-  .out .d { color: var(--text-3); }
-  .out .a { color: var(--accent); }
-  .out .p { color: var(--add); }
-  .out .m { color: var(--del); }
+/* revision table */
+.rev{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--ink);font-size:14px}
+.rev th,.rev td{border:1px solid var(--rule);padding:10px 12px;text-align:left;vertical-align:top}
+.rev thead th{font:500 12px var(--body);font-stretch:112%;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);background:var(--paper)}
+.rev td:first-child{font:600 16px var(--display);font-stretch:112%;color:var(--mark);width:56px;text-align:center}
+.rev code{font-size:13px;overflow-wrap:anywhere}
+.rev .as{color:var(--ink-2);white-space:nowrap}
+details{margin-top:16px}
+summary{cursor:pointer;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+summary:hover{color:var(--mark)}
+pre{margin:12px 0 0;padding:16px;background:var(--sheet);border:1px solid var(--rule);overflow-x:auto;line-height:1.5}
 
-  /* ---------- diff ---------- */
-  .diff { padding-block: clamp(96px, 13vh, 160px); }
-  .diff-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; margin-top: 56px; align-items: start; }
-  .kinds { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink-line); }
-  .kinds li { border-bottom: 1px solid var(--ink-line); }
-  .kinds button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 28px 1fr; gap: 0 10px; width: 100%; padding: 20px 0; cursor: pointer; }
-  .kinds button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-  .kinds .mk { font-family: var(--mono); font-size: 15px; color: var(--ink-2); padding-top: 2px; }
-  .kinds .nm { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: rgba(21, 23, 15, 0.5); transition: color 200ms ease; }
-  .kinds .ds { grid-column: 2; font-size: 15px; line-height: 1.55; color: var(--ink-2); max-width: 44ch; margin-top: 6px; display: none; }
-  .kinds li[aria-current="true"] .nm { color: var(--ink); }
-  .kinds li[aria-current="true"] .mk { color: var(--accent-ink); }
-  .kinds li[aria-current="true"] .ds { display: block; }
-  .panel { position: sticky; top: 88px; border-radius: 4px; background: var(--ground); color: var(--text); border: 1px solid var(--ink-line); }
-  .panel .bar { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
-  .panel pre { margin: 0; padding: 16px 18px 20px; font-family: var(--mono); font-size: 12.5px; line-height: 1.75; overflow-x: auto; }
-  .panel .blk { display: block; transition: opacity 220ms ease; }
-  .panel .blk.dim { opacity: 0.28; }
-  .panel .h { color: var(--text); }
-  .panel .p { color: var(--add); }
-  .panel .m { color: var(--del); }
-  .panel .t { color: var(--accent); }
-  .panel .d { color: var(--text-3); }
-  @media (max-width: 860px) {
-    .diff-grid { grid-template-columns: 1fr; gap: 32px; }
-    .panel { position: static; }
-  }
+/* queries */
+.q{border-top:1px solid var(--ink)}
+.q>div{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:32px;padding:20px 0;border-bottom:1px solid var(--rule)}
+.q h3{font:600 16px/1.35 var(--body);margin:0 0 6px}
+.q p{margin:0;font-size:14px;color:var(--ink-2)}
+.q pre{margin:0;font-size:13px}
+.q pre .c{color:var(--ink-2)}
 
-  /* ---------- faq ---------- */
-  .faq { padding-block: clamp(96px, 13vh, 160px); }
-  .faq-grid { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); gap: 56px; }
-  @media (max-width: 860px) { .faq-grid { grid-template-columns: 1fr; gap: 28px; } }
-  details { border-top: 1px solid var(--line); }
-  details:last-child { border-bottom: 1px solid var(--line); }
-  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 20px; padding: 20px 0; font-size: 17px; font-weight: 500; letter-spacing: -0.01em; color: var(--text); }
-  summary::-webkit-details-marker { display: none; }
-  summary::after { content: '+'; font-family: var(--mono); color: var(--text-3); flex: none; }
-  details[open] summary::after { content: '\2212'; color: var(--accent); }
-  details p { margin: 0 0 22px; font-size: 15px; line-height: 1.65; color: var(--text-2); max-width: 64ch; }
-  details code { font-family: var(--mono); font-size: 13px; color: var(--text); }
+/* build */
+.build{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px}
+.build p{color:var(--ink-2);margin:16px 0 0;max-width:44ch}
+.build dl{margin:0}
+.build dt{font:600 18px/1.35 var(--body);margin:0 0 6px}
+.build dd{margin:0 0 28px;color:var(--ink-2);max-width:60ch}
+.build dd:last-child{margin-bottom:0}
 
-  /* ---------- install ---------- */
-  .install { padding-block: clamp(80px, 11vh, 130px); border-top: 1px solid var(--line); }
-  .install .cmd { margin-top: 28px; width: fit-content; }
-  .install pre { margin: 22px 0 0; font-family: var(--mono); font-size: 13px; line-height: 1.85; color: var(--text-2); overflow-x: auto; }
-  .install pre .d { color: var(--text-3); }
-  .install .facts { margin-top: 26px; font-family: var(--mono); font-size: 12px; color: var(--text-3); line-height: 1.9; }
+/* general notes, as on a drawing */
+.gnotes{border:1px solid var(--ink);background:var(--sheet);padding:20px 24px;margin:0 0 72px;max-width:640px}
+.gnotes h2{font:600 12px/1.3 var(--body);font-stretch:112%;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:0 0 12px}
+.gnotes ol{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px}
+.gnotes li::marker{font-variant-numeric:tabular-nums;color:var(--ink-2)}
 
-  footer { border-top: 1px solid var(--line); padding-block: 28px calc(28px + env(safe-area-inset-bottom, 0px)); font-size: 13.5px; color: var(--text-3); }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; }
-  footer nav { display: flex; flex-wrap: wrap; gap: 22px; }
-  footer a { text-decoration: none; }
-  footer a:hover { color: var(--text); }
+footer{border-top:1px solid var(--rule);padding:20px 0 40px;font-size:14px;color:var(--ink-2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    .caret { animation: none; }
-    .why .text span, .panel .blk, .kinds .nm { transition: none; }
-  }
+@media (max-width:900px){
+  .intro{grid-template-columns:minmax(0,1fr);gap:40px;padding-top:48px}
+  h1{font-size:44px}
+  .figure{grid-template-columns:1fr}
+  .key{border-left:0;border-top:1px solid var(--ink)}
+  .sh{grid-template-columns:minmax(0,1fr);gap:12px}
+  .q>div{grid-template-columns:minmax(0,1fr);gap:12px}
+  .build{grid-template-columns:minmax(0,1fr);gap:24px}
+}
+@media (max-width:600px){
+  .wrap{padding:0 16px}
+  h1{font-size:32px;letter-spacing:-.01em}
+  .lede{font-size:16px}
+  h2.big{font-size:24px}
+  .sheet{padding:4px}
+  .sheet .pin{r:26px}
+  .sheet .pin-n{font-size:28px}
+  .sheet .gref{font-size:22px}
+  .rev .as{white-space:normal}
+  .top nav{gap:14px}
+  section,.figure{margin-bottom:64px}
+  section{padding-bottom:64px}
+}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="page">
-
-<header class="nav">
-  <div class="wrap">
-    <a class="brand" href="#top" aria-label="ReconGraph home">
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="7" width="5" height="4" rx="1" fill="none" stroke="#D99A2B" stroke-width="1.4"/><rect x="12" y="2" width="5" height="4" rx="1" fill="none" stroke="#A3A8A0" stroke-width="1.4"/><rect x="12" y="12" width="5" height="4" rx="1" fill="none" stroke="#A3A8A0" stroke-width="1.4"/><path d="M6 9 L12 4 M6 9 L12 14" stroke="#6F746D" stroke-width="1.2"/></svg>
-      recongraph
-    </a>
-    <a class="link opt" href="#query">Query</a>
-    <a class="link opt" href="#diff">Diff</a>
-    <a class="link opt" href="#faq">FAQ</a>
-    <a class="link" href="https://github.com/swapnil5053/recongraph">GitHub</a>
-    <a class="install" href="#install">Install</a>
-  </div>
+<header class="top">
+  <a class="mark" href="#">RECONGRAPH</a>
+  <nav>
+    <a href="https://github.com/swapnil5053/recongraph/blob/main/docs/usage.md">Docs</a>
+    <a href="https://github.com/swapnil5053/recongraph/releases">Releases</a>
+    <a href="https://github.com/swapnil5053/recongraph">GitHub</a>
+  </nav>
 </header>
 
-<section class="hero" id="top">
-  <div class="stage">
-    <div class="rail" id="rail">
-      <div class="wrap head" id="head">
-        <div class="meta">v0.1.0 · Go 1.24+ · MIT</div>
-        <h1>A web crawler that maps a site as a graph, not a list.</h1>
-        <p>Every page, script, image and external host becomes a node, and every link between them an edge. Each crawl is saved, so you can query it later and diff it against the last one.</p>
-        <div class="cta">
-          <div class="cmd"><span class="prompt">$</span><span class="txt">go install github.com/swapnil5053/recongraph/cmd/recongraph@latest</span><button class="copy" type="button" data-copy="go install github.com/swapnil5053/recongraph/cmd/recongraph@latest">copy</button></div>
-          <a class="ghost" href="https://github.com/swapnil5053/recongraph">Source on GitHub</a>
-        </div>
-      </div>
-
-      <div class="viz" id="viz">
-        <div class="term" id="term" aria-label="Example crawl output">
-          <div class="bar"><span>~/targets</span><span>zsh</span></div>
-          <div class="body">
-            <div style="white-space:nowrap"><span style="color:var(--accent)">$</span> recongraph crawl -u https://example.com<span class="caret" id="caret"></span></div>
-            <div id="crawl"></div>
-          </div>
-        </div>
-        <figure class="graph" id="graph" aria-label="Site graph for example.com: 15 nodes, 19 edges"></figure>
-        <div class="legend" id="legend">
-          <span><i style="background:var(--t-page)"></i>page</span>
-          <span><i style="background:var(--t-script)"></i>script</span>
-          <span><i style="background:var(--t-style)"></i>stylesheet</span>
-          <span><i style="background:var(--t-image)"></i>image</span>
-          <span><i style="background:var(--t-ext)"></i>external host</span>
-          <span><i class="o"></i>orphan</span>
-        </div>
-      </div>
+<div class="intro">
+  <div>
+    <h1>A crawler that keeps the map.</h1>
+    <p class="lede">ReconGraph crawls a site into a graph of what links to what, saves every crawl, and diffs them, so you can see the page that appeared, the endpoint a script started calling, or the new host your checkout page loads.</p>
+    <div class="cmd">
+      <code id="install">go install github.com/swapnil5053/recongraph/cmd/recongraph@latest</code>
+      <button type="button" data-copy="install">Copy</button>
     </div>
+    <p class="alt">Or download a binary for Windows, macOS or Linux from <a href="https://github.com/swapnil5053/recongraph/releases">releases</a>.</p>
   </div>
-</section>
+  <table class="tblock">
+    <caption>A real run. The sheet below is part of it.</caption>
+    <tr><th>Target</th><td>books.toscrape.com</td></tr>
+    <tr><th>Fetched</th><td>150 pages, 0 errors</td></tr>
+    <tr><th>Graph</th><td>1,158 nodes, 5,666 edges</td></tr>
+    <tr><th>Time</th><td>51.3 s at 3 req/s</td></tr>
+    <tr><th>Stack seen</th><td>Bootstrap, Font Awesome, jQuery</td></tr>
+    <tr><th>Version</th><td>v0.1.0</td></tr>
+  </table>
+</div>
 
-<section class="band why" id="why">
-  <div class="wrap">
-    <div class="label">why a graph</div>
-    <p class="text" id="reveal">Most crawlers hand you a list of URLs. Useful for the next tool in the pipe, useless a day later. ReconGraph keeps the structure: what links to what, what is only reachable from a script, and what changed since your last crawl.</p>
-    <div class="notes">
-      <div>
-        <h3>Orphans</h3>
-        <p>Pages and endpoints that nothing links to, found through sitemaps, scripts and form actions.</p>
-      </div>
-      <div>
-        <h3>Reachability</h3>
-        <p>How many clicks a path is from the front door, and which edges get you there.</p>
-      </div>
-      <div>
-        <h3>Third parties</h3>
-        <p>Every external host the site references, counted by how many nodes point at it.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="query" id="query">
-  <div class="wrap">
-    <div class="label">query</div>
-    <h2 style="margin-top:14px">Ask the saved graph, not the site.</h2>
-    <p class="lede">Queries read the stored crawl, so nothing is fetched again. <code class="mono" style="font-size:14px;color:var(--text)">latest</code> can be any crawl ID, a prefix of one, or <code class="mono" style="font-size:14px;color:var(--text)">latest~1</code>.</p>
-
-    <div class="cards">
-      <article class="card">
-        <header>
-          <h3>Find what nothing links to</h3>
-          <p>Nodes that no anchor points at, and the kind of edge that led the crawler to them.</p>
-        </header>
-<pre class="out"><span class="c">recongraph query latest --orphans</span>
-2 node(s) with no inbound anchor:
-
-  <span class="a">https://example.com/api/v1/users</span>
-<span class="d">      status 404, kind page, reachable via js-endpoint</span>
-  <span class="a">https://example.com/search</span>
-<span class="d">      status 404, kind page, reachable via form-action</span></pre>
-      </article>
-
-      <article class="card">
-        <header>
-          <h3>How far it is from the front door</h3>
-          <p>Shortest path from a seed URL to any node in the graph.</p>
-        </header>
-<pre class="out"><span class="c">recongraph query latest --path-to /blog/post-1.html</span>
-2 hop(s) from https://example.com/:
-
-  * https://example.com/
-     `-> https://example.com/blog/
-        `-> <span class="a">https://example.com/blog/post-1.html</span></pre>
-      </article>
-
-      <article class="card">
-        <header>
-          <h3>Every third party</h3>
-          <p>Hosts outside the target, recorded as nodes but never fetched.</p>
-        </header>
-<pre class="out"><span class="c">recongraph query latest --external</span>
-3 third-party host(s):
-
-     1  cdn.jsdelivr.net
-     1  <span class="a">newtracker.example.io</span>
-     1  twitter.com</pre>
-      </article>
-
-      <article class="card">
-        <header>
-          <h3>Fingerprints with their evidence</h3>
-          <p>64 signatures run against every page during a crawl. Each match records what it saw.</p>
-        </header>
-<pre class="out"><span class="c">recongraph fingerprint https://example.com</span>
-https://example.com/  [200 OK]
-
-  WordPress 6.4.2        100%  cms
-<span class="d">      meta generator: WordPress 6.4.2</span>
-<span class="d">      script /wp-includes/js/jquery/jquery.min.js</span>
-  Nginx 1.24.0            90%  web-server
-<span class="d">      header server: nginx/1.24.0</span>
-  PHP                     50%
-<span class="d">      implied by WordPress</span></pre>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section class="band diff" id="diff">
-  <div class="wrap">
-    <div class="label">diff</div>
-    <h2 style="margin-top:14px">Compare any two crawls.</h2>
-    <p class="lede">Run it on a schedule against a site you look after and read what moved. Changes are grouped by kind; select one to find it in the output.</p>
-
-    <div class="diff-grid">
-      <ul class="kinds" id="kinds">
-        <li data-k="appeared"><button type="button"><span class="mk">+</span><span class="nm">Appeared</span><span class="ds">In this crawl but not the last one: new pages, new assets, endpoints found in scripts.</span></button></li>
-        <li data-k="gone"><button type="button"><span class="mk">−</span><span class="nm">Disappeared</span><span class="ds">Reachable last time, gone now. Includes assets that quietly stopped being referenced.</span></button></li>
-        <li data-k="changed"><button type="button"><span class="mk">~</span><span class="nm">Changed</span><span class="ds">Same URL, different status code, title, content hash or detected stack.</span></button></li>
-        <li data-k="restructured"><button type="button"><span class="mk">*</span><span class="nm">Restructured</span><span class="ds">Same page, same status, different outbound links. A checkout page that starts loading something from a new host shows up here. Anything that only watches status codes will miss it.</span></button></li>
-        <li data-k="hosts"><button type="button"><span class="mk">@</span><span class="nm">Third-party hosts</span><span class="ds">Hosts that appeared or went away, listed separately from the pages that brought them in.</span></button></li>
-      </ul>
-
-      <div class="panel" id="panel">
-        <div class="bar"><span>$ recongraph diff latest~1 latest</span><span>2 crawls</span></div>
-<pre><span class="blk" data-k="appeared"><span class="h">APPEARED (2)</span>
-<span class="p">  + https://example.com/pricing.html [200]</span>
-<span class="p">  + https://newtracker.example.io/px</span>
-</span><span class="blk" data-k="gone">
-<span class="h">DISAPPEARED (2)</span>
-<span class="m">  - https://example.com/team.html</span>
-<span class="m">  - https://partner.example.net/deal</span>
-</span><span class="blk" data-k="changed">
-<span class="h">CHANGED (2)</span>
-<span class="t">  ~ https://example.com/</span>
-<span class="d">      content      50e73c1c730e4f22 → 99b16757bec9ddb1</span>
-<span class="d">      tech         Nginx 1.24.0, PHP, WordPress 6.4.2, jQuery</span>
-<span class="d">                →  Nginx 1.24.0, PHP, WordPress 6.5.1, jQuery</span>
-<span class="t">  ~ https://example.com/about.html</span>
-<span class="d">      content      2bfc760aab380804 → e669777320a0ed90</span>
-</span><span class="blk" data-k="restructured">
-<span class="h">RESTRUCTURED (same page, different references) (2)</span>
-  * https://example.com/
-<span class="p">      + now links to https://example.com/pricing.html [href]</span>
-<span class="p">      + now links to https://newtracker.example.io/px [href]</span>
-<span class="m">      - no longer links to https://partner.example.net/deal [href]</span>
-  * https://example.com/about.html
-<span class="m">      - no longer links to https://example.com/team.html [href]</span>
-</span><span class="blk" data-k="hosts">
-<span class="h">NEW THIRD-PARTY HOSTS (1)</span>
-<span class="p">  + newtracker.example.io</span>
-
-<span class="h">THIRD-PARTY HOSTS GONE (1)</span>
-<span class="m">  - partner.example.net</span></span></pre>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="faq" id="faq">
-  <div class="wrap faq-grid">
+<figure class="figure">
+  <svg class="sheet" viewBox="-30 -30 1060 680" role="img" aria-labelledby="sheet-t"><title id="sheet-t">Part of the link graph from a 150-page crawl of books.toscrape.com: the home page, 34 category pages, product pages under nine of them, and the scripts the home page loads.</title><rect class="frame-o" x="-24" y="-24" width="1048" height="668"/><rect class="frame-i" x="0" y="0" width="1000" height="620"/><text class="gref" x="50" y="-8">A</text><line class="tick" x1="100" y1="-24" x2="100" y2="0"/><line class="tick" x1="100" y1="620" x2="100" y2="644"/><text class="gref" x="150" y="-8">B</text><line class="tick" x1="200" y1="-24" x2="200" y2="0"/><line class="tick" x1="200" y1="620" x2="200" y2="644"/><text class="gref" x="250" y="-8">C</text><line class="tick" x1="300" y1="-24" x2="300" y2="0"/><line class="tick" x1="300" y1="620" x2="300" y2="644"/><text class="gref" x="350" y="-8">D</text><line class="tick" x1="400" y1="-24" x2="400" y2="0"/><line class="tick" x1="400" y1="620" x2="400" y2="644"/><text class="gref" x="450" y="-8">E</text><line class="tick" x1="500" y1="-24" x2="500" y2="0"/><line class="tick" x1="500" y1="620" x2="500" y2="644"/><text class="gref" x="550" y="-8">F</text><line class="tick" x1="600" y1="-24" x2="600" y2="0"/><line class="tick" x1="600" y1="620" x2="600" y2="644"/><text class="gref" x="650" y="-8">G</text><line class="tick" x1="700" y1="-24" x2="700" y2="0"/><line class="tick" x1="700" y1="620" x2="700" y2="644"/><text class="gref" x="750" y="-8">H</text><line class="tick" x1="800" y1="-24" x2="800" y2="0"/><line class="tick" x1="800" y1="620" x2="800" y2="644"/><text class="gref" x="850" y="-8">I</text><line class="tick" x1="900" y1="-24" x2="900" y2="0"/><line class="tick" x1="900" y1="620" x2="900" y2="644"/><text class="gref" x="950" y="-8">J</text><text class="gref" x="-12" y="55.7">1</text><line class="tick" x1="-24" y1="103.3" x2="0" y2="103.3"/><line class="tick" x1="1000" y1="103.3" x2="1024" y2="103.3"/><text class="gref" x="-12" y="159.0">2</text><line class="tick" x1="-24" y1="206.7" x2="0" y2="206.7"/><line class="tick" x1="1000" y1="206.7" x2="1024" y2="206.7"/><text class="gref" x="-12" y="262.3">3</text><line class="tick" x1="-24" y1="310.0" x2="0" y2="310.0"/><line class="tick" x1="1000" y1="310.0" x2="1024" y2="310.0"/><text class="gref" x="-12" y="365.7">4</text><line class="tick" x1="-24" y1="413.3" x2="0" y2="413.3"/><line class="tick" x1="1000" y1="413.3" x2="1024" y2="413.3"/><text class="gref" x="-12" y="469.0">5</text><line class="tick" x1="-24" y1="516.7" x2="0" y2="516.7"/><line class="tick" x1="1000" y1="516.7" x2="1024" y2="516.7"/><text class="gref" x="-12" y="572.3">6</text><line class="e" x1="509.0" y1="311.4" x2="801.4" y2="259.3"/><line class="e" x1="509.0" y1="311.4" x2="202.9" y2="303.0"/><line class="e" x1="509.0" y1="311.4" x2="441.6" y2="480.3"/><line class="e" x1="509.0" y1="311.4" x2="284.3" y2="193.9"/><line class="e" x1="509.0" y1="311.4" x2="470.3" y2="139.9"/><line class="e" x1="509.0" y1="311.4" x2="649.5" y2="465.4"/><line class="e" x1="509.0" y1="311.4" x2="265.1" y2="416.3"/><line class="e" x1="509.0" y1="311.4" x2="673.8" y2="165.5"/><line class="e" x1="509.0" y1="311.4" x2="792.2" y2="377.8"/><line class="e" x1="509.0" y1="311.4" x2="633.2" y2="353.5"/><line class="e" x1="509.0" y1="311.4" x2="413.9" y2="303.2"/><line class="e" x1="509.0" y1="311.4" x2="451.8" y2="235.6"/><line class="e" x1="509.0" y1="311.4" x2="586.4" y2="241.4"/><line class="e" x1="509.0" y1="311.4" x2="364.5" y2="320.2"/><line class="e" x1="509.0" y1="311.4" x2="435.6" y2="384.0"/><line class="e" x1="509.0" y1="311.4" x2="602.3" y2="318.1"/><line class="e" x1="509.0" y1="311.4" x2="479.7" y2="391.2"/><line class="e" x1="509.0" y1="311.4" x2="644.6" y2="280.2"/><line class="e" x1="509.0" y1="311.4" x2="424.4" y2="335.1"/><line class="e" x1="509.0" y1="311.4" x2="364.6" y2="293.5"/><line class="e" x1="509.0" y1="311.4" x2="383.9" y2="269.8"/><line class="e" x1="509.0" y1="311.4" x2="412.7" y2="249.0"/><line class="e" x1="509.0" y1="311.4" x2="576.4" y2="348.3"/><line class="e" x1="509.0" y1="311.4" x2="654.1" y2="304.8"/><line class="e" x1="509.0" y1="311.4" x2="620.1" y2="258.2"/><line class="e" x1="509.0" y1="311.4" x2="441.1" y2="274.8"/><line class="e" x1="509.0" y1="311.4" x2="543.3" y2="231.5"/><line class="e" x1="509.0" y1="311.4" x2="374.4" y2="345.5"/><line class="e" x1="509.0" y1="311.4" x2="464.8" y2="358.7"/><line class="e" x1="509.0" y1="311.4" x2="566.8" y2="385.7"/><line class="e" x1="509.0" y1="311.4" x2="490.5" y2="258.3"/><line class="e" x1="509.0" y1="311.4" x2="652.1" y2="330.7"/><line class="e" x1="509.0" y1="311.4" x2="523.1" y2="363.4"/><line class="e" x1="509.0" y1="311.4" x2="524.3" y2="394.4"/><line class="e" x1="509.0" y1="311.4" x2="547.7" y2="263.1"/><line class="e" x1="509.0" y1="311.4" x2="590.9" y2="285.5"/><line class="e" x1="509.0" y1="311.4" x2="497.9" y2="228.8"/><line class="e" x1="509.0" y1="311.4" x2="402.1" y2="366.4"/><line class="e" x1="509.0" y1="311.4" x2="606.3" y2="374.2"/><line class="e" x1="801.4" y1="259.3" x2="903.0" y2="207.9"/><line class="e" x1="801.4" y1="259.3" x2="938.3" y2="268.6"/><line class="e" x1="801.4" y1="259.3" x2="944.0" y2="245.3"/><line class="e" x1="801.4" y1="259.3" x2="935.5" y2="223.2"/><line class="e" x1="202.9" y1="303.0" x2="59.6" y2="309.9"/><line class="e" x1="202.9" y1="303.0" x2="73.9" y2="331.8"/><line class="e" x1="202.9" y1="303.0" x2="81.2" y2="268.1"/><line class="e" x1="202.9" y1="303.0" x2="56.0" y2="287.3"/><line class="e" x1="441.6" y1="480.3" x2="468.8" y2="555.8"/><line class="e" x1="441.6" y1="480.3" x2="429.2" y2="564.0"/><line class="e" x1="441.6" y1="480.3" x2="391.1" y2="556.9"/><line class="e" x1="441.6" y1="480.3" x2="358.3" y2="542.5"/><line class="e" x1="284.3" y1="193.9" x2="190.4" y2="129.1"/><line class="e" x1="284.3" y1="193.9" x2="153.7" y2="169.3"/><line class="e" x1="284.3" y1="193.9" x2="231.0" y2="122.8"/><line class="e" x1="284.3" y1="193.9" x2="165.1" y2="146.7"/><line class="e" x1="470.3" y1="139.9" x2="510.0" y2="66.1"/><line class="e" x1="470.3" y1="139.9" x2="471.8" y2="56.0"/><line class="e" x1="470.3" y1="139.9" x2="432.6" y2="60.8"/><line class="e" x1="470.3" y1="139.9" x2="397.7" y2="73.5"/><line class="e" x1="649.5" y1="465.4" x2="757.5" y2="513.6"/><line class="e" x1="649.5" y1="465.4" x2="656.7" y2="542.4"/><line class="e" x1="649.5" y1="465.4" x2="733.1" y2="532.6"/><line class="e" x1="649.5" y1="465.4" x2="698.7" y2="544.3"/><line class="e" x1="265.1" y1="416.3" x2="130.7" y2="433.6"/><line class="e" x1="265.1" y1="416.3" x2="139.0" y2="456.6"/><line class="e" x1="265.1" y1="416.3" x2="200.1" y2="483.9"/><line class="e" x1="265.1" y1="416.3" x2="160.4" y2="475.8"/><line class="e" x1="673.8" y1="165.5" x2="693.4" y2="88.2"/><line class="e" x1="673.8" y1="165.5" x2="787.4" y2="123.4"/><line class="e" x1="673.8" y1="165.5" x2="770.8" y2="101.3"/><line class="e" x1="673.8" y1="165.5" x2="734.3" y2="91.9"/><line class="e" x1="792.2" y1="377.8" x2="933.3" y2="398.8"/><line class="e" x1="792.2" y1="377.8" x2="929.7" y2="375.3"/><line class="e" x1="792.2" y1="377.8" x2="885.6" y2="433.9"/><line class="e" x1="792.2" y1="377.8" x2="919.9" y2="420.2"/><circle class="n" cx="509.0" cy="311.4" r="8.0"><title>https://books.toscrape.com/</title></circle><circle class="n" cx="801.4" cy="259.3" r="8.0"><title>https://books.toscrape.com/catalogue/category/books/travel_2/index.html</title></circle><circle class="n" cx="202.9" cy="303.0" r="8.0"><title>https://books.toscrape.com/catalogue/category/books/philosophy_7/index.html</title></circle><circle class="n" cx="441.6" cy="480.3" r="7.7"><title>https://books.toscrape.com/catalogue/category/books/mystery_3/index.html</title></circle><circle class="n" cx="284.3" cy="193.9" r="7.7"><title>https://books.toscrape.com/catalogue/category/books/poetry_23/index.html</title></circle><circle class="n" cx="470.3" cy="139.9" r="7.7"><title>https://books.toscrape.com/catalogue/category/books/default_15/index.html</title></circle><circle class="n" cx="649.5" cy="465.4" r="7.7"><title>https://books.toscrape.com/catalogue/category/books/music_14/index.html</title></circle><circle class="n" cx="265.1" cy="416.3" r="7.7"><title>https://books.toscrape.com/catalogue/category/books/young-adult_21/index.html</title></circle><circle class="n" cx="673.8" cy="165.5" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/historical-fiction_4/index.html</title></circle><circle class="n" cx="792.2" cy="377.8" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/sequential-art_5/index.html</title></circle><circle class="n" cx="633.2" cy="353.5" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/fiction_10/index.html</title></circle><circle class="n" cx="413.9" cy="303.2" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/science-fiction_16/index.html</title></circle><circle class="n" cx="451.8" cy="235.6" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/history_32/index.html</title></circle><circle class="n" cx="586.4" cy="241.4" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/business_35/index.html</title></circle><circle class="n" cx="364.5" cy="320.2" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/politics_48/index.html</title></circle><circle class="n" cx="435.6" cy="384.0" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/classics_6/index.html</title></circle><circle class="n" cx="602.3" cy="318.1" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/romance_8/index.html</title></circle><circle class="n" cx="479.7" cy="391.2" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/womens-fiction_9/index.html</title></circle><circle class="n" cx="644.6" cy="280.2" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/childrens_11/index.html</title></circle><circle class="n" cx="424.4" cy="335.1" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/religion_12/index.html</title></circle><circle class="n" cx="364.6" cy="293.5" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/nonfiction_13/index.html</title></circle><circle class="n" cx="383.9" cy="269.8" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/sports-and-games_17/index.html</title></circle><circle class="n" cx="412.7" cy="249.0" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/add-a-comment_18/index.html</title></circle><circle class="n" cx="576.4" cy="348.3" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/fantasy_19/index.html</title></circle><circle class="n" cx="654.1" cy="304.8" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/new-adult_20/index.html</title></circle><circle class="n" cx="620.1" cy="258.2" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/science_22/index.html</title></circle><circle class="n" cx="441.1" cy="274.8" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/paranormal_24/index.html</title></circle><circle class="n" cx="543.3" cy="231.5" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/art_25/index.html</title></circle><circle class="n" cx="374.4" cy="345.5" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/psychology_26/index.html</title></circle><circle class="n" cx="464.8" cy="358.7" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/autobiography_27/index.html</title></circle><circle class="n" cx="566.8" cy="385.7" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/parenting_28/index.html</title></circle><circle class="n" cx="490.5" cy="258.3" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/adult-fiction_29/index.html</title></circle><circle class="n" cx="652.1" cy="330.7" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/humor_30/index.html</title></circle><circle class="n" cx="523.1" cy="363.4" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/horror_31/index.html</title></circle><circle class="n" cx="524.3" cy="394.4" r="7.6"><title>https://books.toscrape.com/catalogue/category/books/food-and-drink_33/index.html</title></circle><circle class="n" cx="903.0" cy="207.9" r="5.2"><title>https://books.toscrape.com/catalogue/its-only-the-himalayas_981/index.html</title></circle><circle class="n" cx="938.3" cy="268.6" r="5.0"><title>https://books.toscrape.com/catalogue/full-moon-over-noahs-ark-an-odyssey-to-mount-ararat-and-beyond_811/index.html</title></circle><circle class="n" cx="944.0" cy="245.3" r="5.0"><title>https://books.toscrape.com/catalogue/see-america-a-celebration-of-our-national-parks-treasured-sites_732/index.html</title></circle><circle class="n" cx="935.5" cy="223.2" r="5.0"><title>https://books.toscrape.com/catalogue/vagabonding-an-uncommon-guide-to-the-art-of-long-term-world-travel_552/index.html</title></circle><circle class="n" cx="59.6" cy="309.9" r="5.2"><title>https://books.toscrape.com/catalogue/sophies-world_966/index.html</title></circle><circle class="n" cx="73.9" cy="331.8" r="5.0"><title>https://books.toscrape.com/catalogue/the-death-of-humanity-and-the-case-for-life_932/index.html</title></circle><circle class="n" cx="81.2" cy="268.1" r="5.0"><title>https://books.toscrape.com/catalogue/the-stranger_861/index.html</title></circle><circle class="n" cx="56.0" cy="287.3" r="5.0"><title>https://books.toscrape.com/catalogue/proofs-of-god-classical-arguments-from-tertullian-to-barth_538/index.html</title></circle><circle class="n" cx="468.8" cy="555.8" r="5.2"><title>https://books.toscrape.com/catalogue/sharp-objects_997/index.html</title></circle><circle class="n" cx="429.2" cy="564.0" r="4.7"><title>https://books.toscrape.com/catalogue/in-a-dark-dark-wood_963/index.html</title></circle><circle class="n" cx="391.1" cy="556.9" r="4.3"><title>https://books.toscrape.com/catalogue/the-past-never-ends_942/index.html</title></circle><circle class="n" cx="358.3" cy="542.5" r="4.0"><title>https://books.toscrape.com/catalogue/a-murder-in-time_877/index.html</title></circle><circle class="n" cx="190.4" cy="129.1" r="5.2"><title>https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html</title></circle><circle class="n" cx="153.7" cy="169.3" r="5.2"><title>https://books.toscrape.com/catalogue/the-black-maria_991/index.html</title></circle><circle class="n" cx="231.0" cy="122.8" r="5.2"><title>https://books.toscrape.com/catalogue/shakespeares-sonnets_989/index.html</title></circle><circle class="n" cx="165.1" cy="146.7" r="5.2"><title>https://books.toscrape.com/catalogue/olio_984/index.html</title></circle><circle class="n" cx="510.0" cy="66.1" r="5.2"><title>https://books.toscrape.com/catalogue/the-coming-woman-a-novel-based-on-the-life-of-the-infamous-feminist-victoria-woodhull_993/index.html</title></circle><circle class="n" cx="471.8" cy="56.0" r="5.2"><title>https://books.toscrape.com/catalogue/the-boys-in-the-boat-nine-americans-and-their-epic-quest-for-gold-at-the-1936-berlin-olympics_992/index.html</title></circle><circle class="n" cx="432.6" cy="60.8" r="5.2"><title>https://books.toscrape.com/catalogue/starving-hearts-triangular-trade-trilogy-1_990/index.html</title></circle><circle class="n open" cx="397.7" cy="73.5" r="4.5"><title>https://books.toscrape.com/catalogue/americas-cradle-of-quarterbacks-western-pennsylvanias-football-factory-from-johnny-unitas-to-joe-montana_974/index.html</title></circle><circle class="n" cx="757.5" cy="513.6" r="5.2"><title>https://books.toscrape.com/catalogue/rip-it-up-and-start-again_986/index.html</title></circle><circle class="n" cx="656.7" cy="542.4" r="5.2"><title>https://books.toscrape.com/catalogue/our-band-could-be-your-life-scenes-from-the-american-indie-underground-1981-1991_985/index.html</title></circle><circle class="n open" cx="733.1" cy="532.6" r="4.5"><title>https://books.toscrape.com/catalogue/how-music-works_979/index.html</title></circle><circle class="n open" cx="698.7" cy="544.3" r="4.0"><title>https://books.toscrape.com/catalogue/love-is-a-mix-tape-music-1_711/index.html</title></circle><circle class="n" cx="130.7" cy="433.6" r="5.2"><title>https://books.toscrape.com/catalogue/the-requiem-red_995/index.html</title></circle><circle class="n" cx="139.0" cy="456.6" r="5.2"><title>https://books.toscrape.com/catalogue/set-me-free_988/index.html</title></circle><circle class="n open" cx="200.1" cy="483.9" r="4.0"><title>https://books.toscrape.com/catalogue/the-natural-history-of-us-the-fine-art-of-pretending-2_941/index.html</title></circle><circle class="n open" cx="160.4" cy="475.8" r="4.0"><title>https://books.toscrape.com/catalogue/obsidian-lux-1_911/index.html</title></circle><circle class="n" cx="693.4" cy="88.2" r="5.2"><title>https://books.toscrape.com/catalogue/tipping-the-velvet_999/index.html</title></circle><circle class="n open" cx="787.4" cy="123.4" r="4.0"><title>https://books.toscrape.com/catalogue/forever-and-forever-the-courtship-of-henry-longfellow-and-fanny-appleton_894/index.html</title></circle><circle class="n open" cx="770.8" cy="101.3" r="4.0"><title>https://books.toscrape.com/catalogue/a-flight-of-arrows-the-pathfinders-2_876/index.html</title></circle><circle class="n open" cx="734.3" cy="91.9" r="4.0"><title>https://books.toscrape.com/catalogue/the-house-by-the-lake_846/index.html</title></circle><circle class="n" cx="933.3" cy="398.8" r="5.2"><title>https://books.toscrape.com/catalogue/scott-pilgrims-precious-little-life-scott-pilgrim-1_987/index.html</title></circle><circle class="n open" cx="929.7" cy="375.3" r="4.0"><title>https://books.toscrape.com/catalogue/tsubasa-world-chronicle-2-tsubasa-world-chronicle-2_949/index.html</title></circle><circle class="n open" cx="885.6" cy="433.9" r="4.0"><title>https://books.toscrape.com/catalogue/this-one-summer_947/index.html</title></circle><circle class="n open" cx="919.9" cy="420.2" r="4.0"><title>https://books.toscrape.com/catalogue/the-nameless-city-the-nameless-city-1_940/index.html</title></circle><rect class="n ext" x="541.7" y="257.1" width="12" height="12" transform="rotate(45 547.7 263.1)"><title>http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js</title></rect><rect class="n" x="586.9" y="281.5" width="8" height="8"><title>https://books.toscrape.com/static/oscar/js/bootstrap3/bootstrap.min.js</title></rect><rect class="n" x="493.9" y="224.8" width="8" height="8"><title>https://books.toscrape.com/static/oscar/js/oscar/ui.js</title></rect><rect class="n" x="398.1" y="362.4" width="8" height="8"><title>https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/bootstrap-datetimepicker.js</title></rect><rect class="n" x="602.3" y="370.2" width="8" height="8"><title>https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/locales/bootstrap-datetimepicker.all.js</title></rect><line class="lead" x1="509.0" y1="311.4" x2="599.0" y2="418.6"/><circle class="pin" cx="599.0" cy="418.6" r="13"/><text class="pin-n" x="599.0" y="418.6" dominant-baseline="central">1</text><line class="lead" x1="202.9" y1="303.0" x2="262.9" y2="303.0"/><circle class="pin" cx="262.9" cy="303.0" r="13"/><text class="pin-n" x="262.9" y="303.0" dominant-baseline="central">2</text><line class="lead" x1="547.7" y1="263.1" x2="575.1" y2="187.9"/><circle class="pin" cx="575.1" cy="187.9" r="13"/><text class="pin-n" x="575.1" y="187.9" dominant-baseline="central">3</text><line class="lead" x1="929.7" y1="375.3" x2="968.3" y2="421.3"/><circle class="pin" cx="968.3" cy="421.3" r="13"/><text class="pin-n" x="968.3" y="421.3" dominant-baseline="central">4</text></svg>
+  <div class="key">
     <div>
-      <div class="label">faq</div>
-      <h2 style="margin-top:14px">Before you point it at something</h2>
+      <h2>Notes</h2>
+      <ol><li><span class="pin-s">1</span><span class="gr">F4</span><span>The seed. Every category page is one click away.</span></li><li><span class="pin-s">2</span><span class="gr">C3</span><span>A hub: 66 pages link here.</span></li><li><span class="pin-s">3</span><span class="gr">F3</span><span>The only third-party host: jQuery from ajax.googleapis.com, loaded by 99 pages.</span></li><li><span class="pin-s">4</span><span class="gr">J4</span><span>Seen but not fetched. The 150-page budget left 1,508 URLs like this one.</span></li></ol>
     </div>
     <div>
-      <details open>
-        <summary>What doesn't it do?</summary>
-        <p>It doesn't render JavaScript. There's no headless browser, so a single-page app that builds its DOM at runtime comes back as a handful of nodes. Use <a href="https://github.com/projectdiscovery/katana">katana</a> for those. Scripts are tokenised, not executed: it finds URLs passed to <code>fetch()</code>, <code>axios</code> and <code>xhr.open</code>, and API-shaped strings, but it doesn't follow variables, so a URL assembled at runtime shows up only as a partial like <code>/api/users/{}</code>.</p>
-      </details>
-      <details>
-        <summary>How hard does it hit a site?</summary>
-        <p>Not hard. It respects robots.txt, sends 2 requests a second per host with a burst of 4, and halves that rate for the rest of the crawl if a host answers 429 or 503. External hosts are recorded as nodes but never fetched. <code>--rate</code> and <code>-c</code> change the pace; <code>--ignore-robots</code> exists for authorised work and prints a warning.</p>
-      </details>
-      <details>
-        <summary>Where do crawls go?</summary>
-        <p>One gzipped JSON file per crawl in <code>~/.recongraph/crawls</code>, readable with <code>gunzip -c … | jq</code>. Nothing leaves your machine. <code>recongraph list</code> shows them, and any two can be diffed.</p>
-      </details>
-      <details>
-        <summary>Can I get the graph out?</summary>
-        <p>Yes: <code>-f json</code>, <code>adjacency</code>, <code>dot</code>, <code>csv</code>, or <code>html</code> for a self-contained interactive view. <code>svg</code> works if Graphviz is installed.</p>
-      </details>
-      <details>
-        <summary>Does it still work in a pipeline?</summary>
-        <p>The default output is one URL per line, and it reads seed URLs from stdin, so <code>cat hosts.txt | recongraph crawl | httpx</code> works. The graph is saved alongside.</p>
-      </details>
+      <h2>Key</h2>
+      <div class="legend">
+        <span><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="currentColor" style="color:var(--ink)"/></svg>Page, fetched</span>
+        <span><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--ink)"/></svg>Page, seen but not fetched</span>
+        <span><svg width="14" height="14" aria-hidden="true"><rect x="3" y="3" width="8" height="8" fill="currentColor" style="color:var(--ink)"/></svg>Script, same site</span>
+        <span><svg width="14" height="14" aria-hidden="true"><rect x="3" y="3" width="8" height="8" transform="rotate(45 7 7)" fill="none" stroke="currentColor" stroke-width="1.4" style="color:var(--ink)"/></svg>Script, third party</span>
+      </div>
+    </div>
+  </div>
+  <figcaption class="cap"><span>books.toscrape.com, depth 2. Home page, 34 categories, products under nine of them.</span><span>Node size = inbound links</span></figcaption>
+</figure>
+
+<section id="diff">
+  <div class="sh">
+    <h2 class="big">Crawl it again and it tells you what moved.</h2>
+    <div>
+      <p>Two crawls of a small test shop, before and after an edit. Most tools can tell you a page appeared or went away. The graph also catches pages that kept the same URL and status code but changed what they link to or load.</p>
+    </div>
+  </div>
+  <table class="rev">
+    <thead><tr><th>Rev</th><th>What changed</th><th>Reported as</th></tr></thead>
+    <tbody>
+      <tr><td>A</td><td>A pricing page was added and linked from every page.</td><td class="as">appeared, restructured ×5</td></tr>
+      <tr><td>B</td><td>The team page was removed.</td><td class="as">disappeared</td></tr>
+      <tr><td>C</td><td>The home page swapped a script from <code>partner.example.net</code> for one from <code>cdn.newtracker.io</code>.</td><td class="as">third-party host change</td></tr>
+      <tr><td>D</td><td><code>app.js</code> moved from <code>/api/v1/cart</code> to <code>/api/v2/cart</code> and started calling <code>/api/v2/stock/{}</code>.</td><td class="as">restructured, new findings</td></tr>
+    </tbody>
+  </table>
+  <details>
+    <summary>Show the full <code>recongraph diff latest~1 latest</code> output</summary>
+<pre>-- diff -----------------------------------------------
+
+APPEARED (3)
+  + https://shop.test/api/v2/cart [404]
+  + https://shop.test/pricing/ [200]
+  + https://cdn.newtracker.io/px.js
+
+DISAPPEARED (3)
+  - https://shop.test/api/v1/cart
+  - https://shop.test/team/
+  - https://partner.example.net/widget.js
+
+CHANGED (6)
+  ~ https://shop.test/
+      content      da4e72ed8d72185c -&gt; b74738944f8bb0d7
+  ~ https://shop.test/app.js
+      content      4431e611d1ed9738 -&gt; 3910eea62da9ad43
+  ~ https://shop.test/contact/
+      content      fdcd401afacd777d -&gt; f666a261dc6f792a
+  ~ https://shop.test/products/
+      content      337705c944b0ff8b -&gt; 4b65eafbef35c0ec
+  ~ https://shop.test/products/desk/
+      content      da54645573233a6d -&gt; fc00c7b080ab4d47
+  ~ https://shop.test/products/lamp/
+      content      bb526bd1949fd7b6 -&gt; 9b72a70526913172
+
+RESTRUCTURED (same page, different references) (6)
+  * https://shop.test/
+      + now links to https://shop.test/pricing/ [href]
+      + now links to https://cdn.newtracker.io/px.js [script]
+      - no longer links to https://shop.test/team/ [href]
+      - no longer links to https://partner.example.net/widget.js [script]
+  * https://shop.test/app.js
+      + now links to https://shop.test/api/v2/cart [js-endpoint]
+      - no longer links to https://shop.test/api/v1/cart [js-endpoint]
+  * https://shop.test/contact/
+      + now links to https://shop.test/pricing/ [href]
+      - no longer links to https://shop.test/team/ [href]
+  * https://shop.test/products/
+      + now links to https://shop.test/pricing/ [href]
+      - no longer links to https://shop.test/team/ [href]
+  * https://shop.test/products/desk/
+      + now links to https://shop.test/pricing/ [href]
+      - no longer links to https://shop.test/team/ [href]
+  * https://shop.test/products/lamp/
+      + now links to https://shop.test/pricing/ [href]
+      - no longer links to https://shop.test/team/ [href]
+
+NEW THIRD-PARTY HOSTS (1)
+  + cdn.newtracker.io
+
+THIRD-PARTY HOSTS GONE (1)
+  - partner.example.net
+
+NEW FINDINGS (2)
+  + [api-endpoint] /api/v2/cart
+  + [api-endpoint] /api/v2/stock/{}
+
+FINDINGS GONE (1)
+  - [api-endpoint] /api/v1/cart
+
+-------------------------------------------------------</pre>
+  </details>
+</section>
+
+<section id="query">
+  <div class="sh">
+    <h2 class="big">Ask the saved graph, not the site.</h2>
+    <div><p>Queries run against the stored crawl, so they're instant and send no traffic. Output below is from the books.toscrape.com run.</p></div>
+  </div>
+  <div class="q">
+    <div>
+      <div><h3>Which pages matter most?</h3><p>Ranked by inbound links. Assets are left out, since every page loads the same stylesheet.</p></div>
+<pre><span class="c">$ recongraph query latest --hubs 3</span>
+    99  https://books.toscrape.com/catalogue/category/books_1/index.html
+    99  https://books.toscrape.com/index.html
+    66  https://books.toscrape.com/catalogue/category/books/philosophy_7/index.html</pre>
+    </div>
+    <div>
+      <div><h3>How deep is this page?</h3><p>Shortest click path from the page you started on.</p></div>
+<pre><span class="c">$ recongraph query latest --path-to poetry_23/index.html</span>
+1 hop(s) from https://books.toscrape.com/:
+
+  * https://books.toscrape.com/
+     `-&gt; https://books.toscrape.com/catalogue/category/books/poetry_23/index.html</pre>
+    </div>
+    <div>
+      <div><h3>Who else runs code here?</h3><p>Every third-party host, by how many pages load from it.</p></div>
+<pre><span class="c">$ recongraph query latest --external</span>
+1 third-party host(s):
+
+    99  ajax.googleapis.com</pre>
     </div>
   </div>
 </section>
 
-<section class="install" id="install">
-  <div class="wrap">
-    <div class="label">install</div>
-    <h2 style="margin-top:14px">One binary, no config file.</h2>
-    <div class="cmd"><span class="prompt">$</span><span class="txt">go install github.com/swapnil5053/recongraph/cmd/recongraph@latest</span><button class="copy" type="button" data-copy="go install github.com/swapnil5053/recongraph/cmd/recongraph@latest">copy</button></div>
-<pre><span class="d"># or from source</span>
-git clone https://github.com/swapnil5053/recongraph
-cd recongraph &amp;&amp; make build</pre>
-    <div class="facts">Go 1.24+ · static binary, no cgo · one dependency (golang.org/x/net/html)</div>
+<section id="build" class="build">
+  <div>
+    <h2 class="big">How it's built</h2>
+    <p>Go, one dependency, no cgo, static binaries for five platforms. The decisions, including the ones I reversed, are written up as <a href="https://github.com/swapnil5053/recongraph/tree/main/docs/adr">ADRs</a>.</p>
   </div>
+  <dl>
+    <dt>A pipeline that can't deadlock</dt>
+    <dd>Frontier, workers and graph builder form a cycle of bounded channels. The frontier offers its send and receive in one <code>select</code>, so it always drains, and the crawl ends when the queue is empty and nothing is in flight.</dd>
+    <dt>One owner for the graph</dt>
+    <dd>Only the builder goroutine writes to it, so it needs no locks and scope is enforced in one place.</dd>
+    <dt>A lexer for JavaScript</dt>
+    <dd>Endpoints come from tokenised scripts, not regex, so comments, escaped slashes and regex literals don't produce false hits.</dd>
+    <dt>Tested where it matters</dt>
+    <dd>122 tests and a fuzz target under the race detector in CI, heaviest on URL canonicalisation, which the diff depends on.</dd>
+  </dl>
 </section>
+
+<aside class="gnotes" aria-labelledby="gn">
+  <h2 id="gn">General notes</h2>
+  <ol>
+    <li>No headless browser. A single-page app comes back nearly empty; <a href="https://github.com/projectdiscovery/katana">katana</a> handles those.</li>
+    <li>JavaScript variables aren't followed, so <code>fetch(base + "/x")</code> isn't resolved.</li>
+    <li>No passive sources. Nothing from Wayback or certificate logs, only what crawling can reach.</li>
+    <li>Respects robots.txt and rate-limits per host by default. Only crawl sites you own or are allowed to test.</li>
+  </ol>
+</aside>
 
 <footer>
-  <div class="wrap">
-    <span>MIT licence · © 2026 Swapnil Kumar</span>
-    <nav>
-      <a href="https://github.com/swapnil5053/recongraph">GitHub</a>
-      <a href="https://github.com/swapnil5053/recongraph/tree/main/docs/adr">Design notes</a>
-      <a href="https://github.com/hakluke/hakrawler">Prior art: hakrawler</a>
-    </nav>
-  </div>
+  <span>Built by <a href="https://github.com/swapnil5053">Swapnil Kumar</a>. MIT licence.</span>
+  <span>Started as a rewrite of <a href="https://github.com/hakluke/hakrawler">hakrawler</a>.</span>
 </footer>
 
 </div>
-
 <script>
-(function () {
-  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-  var lerp = function (t, a, b) { return clamp((t - a) / (b - a), 0, 1); };
-  var ease = function (t) { return t * t * (3 - 2 * t); };
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  /* ---- copy buttons ---- */
-  document.querySelectorAll('[data-copy]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var t = b.getAttribute('data-copy');
-      var done = function () { b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy'; }, 1400); };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(t).then(done, function () { fallback(t); done(); });
-      } else { fallback(t); done(); }
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var text = document.getElementById(b.dataset.copy).textContent;
+    navigator.clipboard.writeText(text).then(function () {
+      b.textContent = 'Copied';
+      setTimeout(function () { b.textContent = 'Copy'; }, 1500);
     });
   });
-  function fallback(t) {
-    var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) {} ta.remove();
-  }
-
-  /* ---- crawl summary lines ---- */
-  var CRAWL = [
-    ['target', 'https://example.com'],
-    ['status', 'complete in 267ms'],
-    ['graph', '15 nodes, 19 edges', 1],
-    ['fetched', '12 pages, 0 errors'],
-    ['orphans', '2 (no inbound link)', 1],
-    ['3rd party', '3 external hosts'],
-    ['tech', 'Nginx 1.24.0, PHP, WordPress 6.4.2, jQuery', 2]
-  ];
-  var crawlEl = document.getElementById('crawl');
-  var crawlRows = CRAWL.map(function (l) {
-    var r = document.createElement('div'); r.className = 'row';
-    r.innerHTML = '<span class="k">' + l[0] + '</span><span style="color:' + (l[2] === 1 ? 'var(--accent)' : l[2] === 2 ? 'var(--text-2)' : 'var(--text)') + '">' + l[1] + '</span>';
-    crawlEl.appendChild(r); return r;
-  });
-
-  /* ---- graph ---- */
-  var NODES = {
-    root:    ['/', '/', 'page'],
-    sitemap: ['/from-sitemap.html', 'sitemap.html', 'page'],
-    contact: ['/contact.html', 'contact.html', 'page'],
-    pricing: ['/pricing.html', 'pricing.html', 'page'],
-    search:  ['/search [404]', 'search [404]', 'orphan'],
-    logo:    ['/assets/logo.png', 'logo.png', 'image'],
-    blog:    ['/blog/', '/blog/', 'page'],
-    post1:   ['/blog/post-1.html', 'post-1.html', 'page'],
-    about:   ['/about.html', 'about.html', 'page'],
-    appjs:   ['/assets/app.js', 'app.js', 'script'],
-    api:     ['/api/v1/users [404]', 'users [404]', 'orphan'],
-    sitecss: ['/assets/site.css', 'site.css', 'style'],
-    cdn:     ['cdn.jsdelivr.net', 'jsdelivr.net', 'ext'],
-    twitter: ['twitter.com', 'twitter.com', 'ext'],
-    tracker: ['newtracker.example.io', 'newtracker.io', 'ext']
-  };
-  var EDGES = [
-    ['root','contact'], ['root','pricing'], ['root','search'], ['root','logo'], ['root','blog'],
-    ['root','about'], ['root','appjs'], ['root','sitecss'], ['root','cdn'], ['root','twitter'],
-    ['root','tracker'], ['blog','post1'], ['post1','blog'], ['blog','root'], ['contact','root'],
-    ['pricing','root'], ['about','root'], ['appjs','api'], ['post1','about']
-  ];
-  var COLS_WIDE = [
-    { c: 'site', items: [['sitemap', 0], ['root', 4]] },
-    { c: 'site', items: [['contact', 0], ['pricing', 1], ['search', 2], ['logo', 3], ['blog', 4], ['about', 5], ['appjs', 6], ['sitecss', 7]] },
-    { c: 'site', items: [['post1', 4], ['api', 6]] },
-    { c: 'ext',  items: [['cdn', 1], ['twitter', 3], ['tracker', 5]] }
-  ];
-  var COLS_TIGHT = [
-    { c: 'site', items: [['sitemap', 0], ['root', 3]] },
-    { c: 'site', items: [['contact', 0], ['pricing', 1], ['search', 2], ['blog', 3], ['about', 4], ['appjs', 5], ['sitecss', 6], ['logo', 7]] },
-    { c: 'site', items: [['post1', 3], ['api', 5]] },
-    { c: 'ext',  items: [['cdn', 1], ['twitter', 3], ['tracker', 5]] }
-  ];
-  var TYPE = { page: '--t-page', script: '--t-script', style: '--t-style', image: '--t-image', ext: '--t-ext', orphan: '--t-page' };
-  var NS = 'http://www.w3.org/2000/svg';
-  var graphEl = document.getElementById('graph');
-  var G = null, layoutKey = '';
-
-  function el(tag, attrs) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
-
-  function build() {
-    var tight = graphEl.clientWidth < 720;
-    var key = tight ? 't' : 'w';
-    if (key === layoutKey) return;
-    layoutKey = key;
-
-    var F = tight ? 13 : 12.5;
-    var charW = F * 0.6, padL = F * 1.6, padR = F * 0.9, nodeH = Math.round(F * 2.3);
-    var gapY = Math.round(F * (tight ? 1.0 : 1.4)), gapX = Math.round(F * (tight ? 2.2 : 3.4)), pitch = nodeH + gapY;
-    var cols = tight ? COLS_TIGHT : COLS_WIDE;
-    var lab = function (id) { return tight ? NODES[id][1] : NODES[id][0]; };
-    var colW = cols.map(function (c) { return Math.max.apply(null, c.items.map(function (it) { return Math.ceil(lab(it[0]).length * charW + padL + padR); })); });
-    var colX = [], x = 24;
-    cols.forEach(function (c, i) { if (c.c === 'ext') x += gapX * 0.8; colX[i] = x; x += colW[i] + gapX; });
-    var W = x - gapX + 24;
-    var rows = Math.max.apply(null, cols.map(function (c) { return Math.max.apply(null, c.items.map(function (it) { return it[1]; })); })) + 1;
-    var top = 34;
-    var H = top + rows * pitch - gapY + 18;
-
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'xMidYMid meet', role: 'img' });
-    var defs = el('defs', {});
-    var mk = el('marker', { id: 'arw', viewBox: '0 0 8 8', refX: '7', refY: '4', markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
-    mk.appendChild(el('path', { d: 'M0 1 L7 4 L0 7 z', fill: '#4E544C' }));
-    defs.appendChild(mk); svg.appendChild(defs);
-
-    // cluster frames
-    var siteR = colX[2] + colW[2] + 12, extL = colX[3] - 12;
-    [[12, siteR, 'EXAMPLE.COM'], [extL, W - 12, 'EXTERNAL']].forEach(function (f) {
-      svg.appendChild(el('rect', { x: f[0], y: 8, width: f[1] - f[0], height: H - 12, rx: 4, fill: 'rgba(230,232,226,0.015)', stroke: 'rgba(230,232,226,0.08)', 'stroke-dasharray': '3 5' }));
-      var t = el('text', { x: f[0] + 12, y: 26, 'font-size': F * 0.82, class: 'c-label' }); t.textContent = f[2]; svg.appendChild(t);
-    });
-
-    var byId = {}, nodes = [];
-    cols.forEach(function (c, ci) {
-      c.items.forEach(function (it) {
-        var n = { id: it[0], type: NODES[it[0]][2], x: colX[ci], y: top + it[1] * pitch, w: colW[ci], h: nodeH };
-        n.cx = n.x + n.w / 2; n.cy = n.y + n.h / 2; byId[n.id] = n; nodes.push(n);
-      });
-    });
-
-    var edgeG = el('g', {}), nodeG = el('g', {});
-    svg.appendChild(edgeG); svg.appendChild(nodeG);
-    var edges = EDGES.map(function (e) {
-      var A = byId[e[0]], B = byId[e[1]];
-      var fwd = B.cx > A.cx + 1, same = Math.abs(B.cx - A.cx) <= 1;
-      var sx, tx, d;
-      if (same) {
-        // same column: loop out to the left
-        sx = A.x; tx = B.x - 6;
-        var lx = A.x - gapX * 0.6;
-        d = 'M ' + sx + ' ' + A.cy + ' C ' + lx + ' ' + A.cy + ', ' + lx + ' ' + B.cy + ', ' + tx + ' ' + B.cy;
-      } else {
-        sx = fwd ? A.x + A.w : A.x; tx = fwd ? B.x - 6 : B.x + B.w + 6;
-        var mx = (sx + tx) / 2, bow = fwd ? 0 : -nodeH * 0.9;
-        d = 'M ' + sx + ' ' + A.cy + ' C ' + mx + ' ' + (A.cy + bow) + ', ' + mx + ' ' + (B.cy + bow) + ', ' + tx + ' ' + B.cy;
-      }
-      var p = el('path', { d: d, fill: 'none', stroke: '#4E544C', 'stroke-width': 1.1, pathLength: 1, 'stroke-dasharray': 1, 'stroke-dashoffset': 1, 'marker-end': 'url(#arw)' });
-      edgeG.appendChild(p); return p;
-    });
-    var nodeEls = nodes.map(function (n) {
-      var g = el('g', { opacity: 0 });
-      var orphan = n.type === 'orphan';
-      g.appendChild(el('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 3, fill: orphan ? 'rgba(217,154,43,0.08)' : '#121513', stroke: orphan ? '#D99A2B' : 'rgba(230,232,226,0.18)', 'stroke-width': 1 }));
-      var sw = F * 0.5;
-      g.appendChild(el('rect', { x: n.x + F * 0.7, y: n.cy - sw / 2, width: sw, height: sw, rx: 1, fill: getComputedStyle(document.documentElement).getPropertyValue(TYPE[n.type]).trim() }));
-      var t = el('text', { x: n.x + padL, y: n.cy + F * 0.35, 'font-size': F, class: 'n-label' });
-      if (orphan) t.setAttribute('style', 'fill:#D99A2B');
-      t.textContent = lab(n.id); g.appendChild(t);
-      nodeG.appendChild(g); return g;
-    });
-
-    graphEl.innerHTML = ''; graphEl.appendChild(svg);
-    G = { edges: edges, nodes: nodeEls };
-  }
-
-  /* ---- hero scroll ---- */
-  var hero = document.getElementById('top'), rail = document.getElementById('rail'), head = document.getElementById('head');
-  var term = document.getElementById('term'), legend = document.getElementById('legend'), caret = document.getElementById('caret');
-  if (reduced) hero.classList.add('static');
-
-  function drawGraph(gp) {
-    if (!G) return;
-    G.nodes.forEach(function (g, i) { g.setAttribute('opacity', ease(lerp(gp, i * 0.035, i * 0.035 + 0.3)).toFixed(3)); });
-    G.edges.forEach(function (p, i) { p.setAttribute('stroke-dashoffset', (1 - ease(lerp(gp, 0.18 + i * 0.022, 0.5 + i * 0.022))).toFixed(3)); });
-  }
-
-  function heroFrame() {
-    if (reduced) { drawGraph(1); return; }
-    var vh = window.innerHeight;
-    var r = hero.getBoundingClientRect();
-    var p = clamp(-r.top / Math.max(1, r.height - vh), 0, 1);
-    var hc = ease(lerp(p, 0.04, 0.26));
-    rail.style.transform = 'translateY(' + (-head.offsetHeight * hc).toFixed(1) + 'px)';
-    head.style.opacity = (1 - hc).toFixed(3);
-    var tp = lerp(p, 0.02, 0.36);
-    crawlRows.forEach(function (row, i) { row.style.opacity = lerp(tp, i / crawlRows.length * 0.9, i / crawlRows.length * 0.9 + 0.12).toFixed(3); });
-    caret.style.display = tp > 0.02 ? 'none' : '';
-    var tf = lerp(p, 0.42, 0.52);
-    term.style.opacity = (1 - tf).toFixed(3);
-    term.style.visibility = tf >= 1 ? 'hidden' : 'visible';
-    var gv = lerp(p, 0.46, 0.56);
-    graphEl.style.opacity = gv.toFixed(3);
-    legend.style.opacity = (gv * 0.95).toFixed(3);
-    drawGraph(lerp(p, 0.48, 0.95));
-  }
-
-  /* ---- reveal paragraph ---- */
-  var revealEl = document.getElementById('reveal');
-  var accentPhrases = ['keeps the structure:', 'what changed since your last crawl.'];
-  var text = revealEl.textContent.trim();
-  var marks = accentPhrases.map(function (ph) { var i = text.indexOf(ph); return [i, i + ph.length]; });
-  var pos = 0, words = [];
-  revealEl.innerHTML = '';
-  text.split(' ').forEach(function (w) {
-    var s = text.indexOf(w, pos); pos = s + w.length;
-    var acc = marks.some(function (m) { return s >= m[0] && s < m[1]; });
-    var sp = document.createElement('span'); sp.textContent = w + ' ';
-    sp.dataset.acc = acc ? '1' : ''; revealEl.appendChild(sp); words.push(sp);
-  });
-  function revealFrame() {
-    var vh = window.innerHeight, r = revealEl.getBoundingClientRect();
-    var rp = reduced ? 1 : clamp((vh * 0.9 - r.top) / (r.height + vh * 0.35), 0, 1);
-    words.forEach(function (sp, i) {
-      var on = rp >= (i / words.length) * 0.85 + 0.05;
-      sp.style.color = sp.dataset.acc ? (on ? 'var(--accent-ink)' : 'rgba(138,94,18,0.35)') : (on ? 'var(--ink)' : 'rgba(21,23,15,0.3)');
-    });
-  }
-
-  /* ---- diff selector ---- */
-  var kindsEl = document.getElementById('kinds'), items = Array.prototype.slice.call(kindsEl.children);
-  var blocks = Array.prototype.slice.call(document.querySelectorAll('#panel .blk'));
-  var touched = false, current = '';
-  function select(k) {
-    if (k === current) return; current = k;
-    items.forEach(function (li) { li.setAttribute('aria-current', li.dataset.k === k ? 'true' : 'false'); });
-    blocks.forEach(function (b) { b.classList.toggle('dim', b.dataset.k !== k); });
-  }
-  items.forEach(function (li) { li.querySelector('button').addEventListener('click', function () { touched = true; select(li.dataset.k); }); });
-  select('restructured');
-  function diffFrame() {
-    if (touched || reduced || window.innerWidth <= 860) return;
-    var line = window.innerHeight * 0.45, best = null, bd = Infinity;
-    items.forEach(function (li) { var r = li.getBoundingClientRect(); var d = Math.abs(r.top + r.height / 2 - line); if (d < bd) { bd = d; best = li; } });
-    var sec = document.getElementById('diff').getBoundingClientRect();
-    if (best && sec.top < window.innerHeight * 0.5 && sec.bottom > 0) select(best.dataset.k);
-  }
-
-  /* ---- loop ---- */
-  var raf = 0;
-  function frame() { raf = 0; heroFrame(); revealFrame(); diffFrame(); }
-  function queue() { if (!raf) raf = requestAnimationFrame(frame); }
-  window.addEventListener('scroll', queue, { passive: true });
-  window.addEventListener('resize', function () { build(); queue(); });
-  build(); frame();
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(queue);
-})();
+});
 </script>
-
 </body>
 </html>
