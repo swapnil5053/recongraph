@@ -194,6 +194,7 @@ document.getElementById('hdr').textContent =
 
 // --- force-directed layout (Fruchterman-Reingold, cooled) -------------------
 const N = D.nodes.length;
+const labelMin = Math.max(3, (D.nodes.filter(n => n.k==='page').map(n => n.d).sort((a,b) => b-a)[19]) || 0);
 const pos = new Float64Array(N*2), vel = new Float64Array(N*2);
 for (let i=0;i<N;i++){
   const a = (i/N)*Math.PI*2, r = 120 + (i%%17)*14;
@@ -247,6 +248,8 @@ function draw(){
   const r = cv.getBoundingClientRect();
   ctx.clearRect(0,0,r.width,r.height);
   ctx.lineWidth = 1;
+  placed = [];
+  const queue = [];
   for (const e of D.edges){
     const [x1,y1]=toScreen(e.s), [x2,y2]=toScreen(e.t);
     const on = sel!==null && (e.s===sel||e.t===sel);
@@ -260,11 +263,26 @@ function draw(){
     ctx.fillStyle = n.c>=400 ? '#ef4444' : colorOf(n);
     ctx.fill();
     if (sel===i||hover===i){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke(); ctx.lineWidth=1; }
-    if (view.z>0.85 && (n.d>2 || sel===i || hover===i)){
-      ctx.fillStyle='rgba(230,233,239,.72)'; ctx.font='10px ui-sans-serif,system-ui';
-      ctx.fillText(n.l, x+rad+3, y+3);
+    if (sel===i || hover===i || (n.k==='page' && n.d>=labelMin/Math.max(view.z,0.2))){
+      queue.push([n.l, x+rad+3, y+3, sel===i||hover===i, n.d]);
     }
   }
+  // Drawn after every node so no circle paints over a label; forced labels
+  // (selected, hovered) and busier pages claim space first.
+  queue.sort((a,b) => (b[3]-a[3]) || (b[4]-a[4]));
+  for (const q of queue) label(q[0], q[1], q[2], q[3]);
+}
+// Labels are the first thing to turn a large graph into noise, so only the
+// best-connected pages get one (more as you zoom in), and a label that would
+// overlap one already drawn is skipped.
+let placed = [];
+function label(text, x, y, force){
+  ctx.font='10px ui-sans-serif,system-ui';
+  const w = ctx.measureText(text).width, h = 12, box = [x, y-10, x+w, y-10+h];
+  if (!force && placed.some(b => box[0]<b[2] && box[2]>b[0] && box[1]<b[3] && box[3]>b[1])) return;
+  placed.push(box);
+  ctx.fillStyle = force ? '#fff' : 'rgba(230,233,239,.75)';
+  ctx.fillText(text, x, y);
 }
 function pick(mx,my){
   let best=null, bd=225;
