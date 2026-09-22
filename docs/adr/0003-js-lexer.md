@@ -48,7 +48,8 @@ crawl edges.
 ## Consequences
 
 It still doesn't follow variables: `const base = "/api"; fetch(base + "/x")`
-gives `/api` and a partial `{}/x`. Doing better means data flow, which is where
+finds `/api` as a literal but nothing for the call, since a value with no
+static prefix can't be placed. Doing better means data flow, which is where
 a real parser starts to pay off. Throughput is around 15 MB/s on a minified
 bundle, well above what the rate limiter lets through. A fuzz test
 (`FuzzEndpoints`) guards against panics and hangs on malformed input.

@@ -17,7 +17,7 @@ import (
 // Version is overridden at build time:
 //
 //	go build -ldflags "-X github.com/swapnil5053/recongraph/internal/cli.Version=v0.2.0"
-var Version = "0.1.0-dev"
+var Version = "0.1.0"
 
 type command struct {
 	name    string

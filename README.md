@@ -25,6 +25,9 @@ So the crawl here is a means to an end. What you get at the end is a graph you c
 
 ## Install
 
+Prebuilt binaries for Linux, macOS and Windows are on the
+[releases page](https://github.com/swapnil5053/recongraph/releases). Or, with Go:
+
 ```sh
 go install github.com/swapnil5053/recongraph/cmd/recongraph@latest
 ```
@@ -190,6 +193,7 @@ internal/
   fetch/          HTTP client, per-host limiter, retries, robots.txt
   parse/          HTML and sitemap extraction, no I/O
   passive/        emails, buckets, endpoints, secrets, internal hosts
+  jsscan/         JavaScript lexer and endpoint extraction
   fingerprint/    signature engine + embedded database
   builder/        graph construction
   crawl/          pipeline wiring
@@ -218,8 +222,13 @@ ReconGraph output without wanting the crawler.
 - **No headless rendering.** A JavaScript-heavy SPA will return almost nothing.
   [katana](https://github.com/projectdiscovery/katana) does this properly and
   will out-crawl ReconGraph on modern front-ends.
-- **JS endpoint extraction is regex-based**, not real parsing. It gets string
-  literals and obvious `fetch()` calls and misses anything computed.
+- **JS analysis is lexical, not semantic.** `internal/jsscan` tokenises
+  scripts properly (comments, escapes, regex literals, template strings) and
+  picks URLs out of `fetch`/`axios`/`$.ajax`/`xhr.open` calls, `url:`-style
+  properties, and API-shaped string literals. It doesn't follow variables, so
+  `const base = "/api"; fetch(base + "/users")` yields `/api` and nothing
+  for the call itself. Endpoints built at runtime are reported as
+  findings (`/api/users/{}/orders`) but not crawled.
 - **No passive sources.** Nothing from Wayback, Common Crawl or certificate
   transparency; only what's reachable by crawling.
 - `RootDomain` doesn't know about multi-part public suffixes (`foo.co.uk`). It's
