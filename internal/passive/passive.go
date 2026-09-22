@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/swapnil5053/recongraph/internal/jsscan"
 )
 
 // Finding kinds.
@@ -39,8 +41,6 @@ var (
 
 	// API-shaped paths inside JS and HTML.
 	reAPIPath = regexp.MustCompile(`(?i)["'` + "`" + `](/(?:api|rest|graphql|v[0-9]{1,2}|_next/data|wp-json|admin/api)(?:/[a-z0-9_\-./{}:]*)?)["'` + "`" + `]`)
-	reFetch   = regexp.MustCompile(`(?i)(?:fetch|axios(?:\.\w+)?|\$\.(?:get|post|ajax)|XMLHttpRequest\(\)\.open)\s*\(\s*["'` + "`" + `]([^"'` + "`" + `\s]{2,300})["'` + "`" + `]`)
-	reURLLit  = regexp.MustCompile(`(?i)["'` + "`" + `](https?://[a-z0-9.\-]+\.[a-z]{2,24}(?::\d{2,5})?(?:/[^"'` + "`" + `\s]{0,300})?)["'` + "`" + `]`)
 
 	// Social handles / profile links.
 	reSocial = regexp.MustCompile(`(?i)https?://(?:www\.)?(twitter\.com|x\.com|linkedin\.com|github\.com|facebook\.com|instagram\.com|youtube\.com|t\.me|discord\.gg|medium\.com|stackoverflow\.com)/[A-Za-z0-9_\-./@]{1,80}`)
@@ -127,15 +127,13 @@ func Extract(body []byte, isScript bool) []Result {
 	}
 
 	if isScript {
-		for _, m := range reAPIPath.FindAllStringSubmatch(s, 300) {
-			if len(m) > 1 {
-				add(KindAPI, m[1], "")
+		for _, e := range jsscan.Endpoints(body) {
+			// Absolute URLs found as plain literals are mostly CDNs and docs
+			// links; they become edges, not findings.
+			if e.Source == jsscan.SourceLiteral && !strings.HasPrefix(e.Value, "/") {
+				continue
 			}
-		}
-		for _, m := range reFetch.FindAllStringSubmatch(s, 300) {
-			if len(m) > 1 {
-				add(KindAPI, m[1], "call site")
-			}
+			add(KindAPI, e.Value, endpointEvidence(e))
 		}
 	} else {
 		for _, m := range reAPIPath.FindAllStringSubmatch(s, 120) {
@@ -155,40 +153,32 @@ func Extract(body []byte, isScript bool) []Result {
 }
 
 // JSEndpoints pulls crawlable URLs out of JavaScript. These become
-// rel="js-endpoint" edges.
+// rel="js-endpoint" edges. Endpoints built at runtime are left out, since
+// there's nothing to fetch; Extract still reports them as findings.
 func JSEndpoints(body []byte) []string {
-	s := string(body)
-	seen := map[string]bool{}
 	var out []string
-	push := func(v string) {
-		v = strings.TrimSpace(v)
-		if v == "" || seen[v] {
-			return
-		}
-		// Template literals and concatenation aren't fetchable.
-		if strings.ContainsAny(v, "${}<>") || strings.Contains(v, "+") {
-			return
-		}
-		seen[v] = true
-		out = append(out, v)
-	}
-	for _, m := range reFetch.FindAllStringSubmatch(s, 400) {
-		if len(m) > 1 {
-			push(m[1])
+	for _, e := range jsscan.Endpoints(body) {
+		if !e.Dynamic {
+			out = append(out, e.Value)
 		}
 	}
-	for _, m := range reAPIPath.FindAllStringSubmatch(s, 400) {
-		if len(m) > 1 {
-			push(m[1])
-		}
-	}
-	for _, m := range reURLLit.FindAllStringSubmatch(s, 400) {
-		if len(m) > 1 {
-			push(m[1])
-		}
-	}
-	sort.Strings(out)
 	return out
+}
+
+func endpointEvidence(e jsscan.Endpoint) string {
+	var ev string
+	switch e.Source {
+	case jsscan.SourceCall:
+		ev = e.Callee + "()"
+	case jsscan.SourceProperty:
+		ev = "url property"
+	default:
+		ev = "string literal"
+	}
+	if e.Dynamic {
+		ev += ", built at runtime"
+	}
+	return ev
 }
 
 // ExtractFromComments runs the extractors over HTML comment text only.
