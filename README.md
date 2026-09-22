@@ -154,6 +154,10 @@ channel, workers block on send, they stop pulling tasks, the frontier backs up.
 
 More detail in [docs/adr/](docs/adr/).
 
+## Site
+
+`site/index.html` is the project page: one static file, no build step. `.github/workflows/pages.yml` deploys it to GitHub Pages on any push that touches `site/`. Turn Pages on in the repo settings with the source set to GitHub Actions.
+
 ## Layout
 
 ```
@@ -172,6 +176,7 @@ internal/
   diff/           crawl comparison
   export/         json, dot, csv, html, svg
 pkg/sitegraph/    the graph model, canonical URLs, encoders
+site/             project page (GitHub Pages)
 ```
 
 Only `sitegraph` is in `pkg/`, since it's the one thing you'd import to read
