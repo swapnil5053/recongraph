@@ -116,13 +116,13 @@ func targetNote(t string) string {
 }
 
 func printDiff(r *diff.Result, oldID, newID string, explain bool) {
-	fmt.Printf("── diff ───────────────────────────────────────────────\n")
+	fmt.Printf("-- diff -----------------------------------------------\n")
 	fmt.Printf("  old  %s\n", oldID)
 	fmt.Printf("  new  %s\n\n", newID)
 
 	if r.Empty() {
 		fmt.Println("  No changes.")
-		fmt.Printf("───────────────────────────────────────────────────────\n")
+		fmt.Printf("-------------------------------------------------------\n")
 		return
 	}
 
@@ -146,7 +146,7 @@ func printDiff(r *diff.Result, oldID, newID string, explain bool) {
 		for _, c := range r.ChangedNodes {
 			fmt.Printf("  ~ %s\n", c.URL)
 			for i, f := range c.Fields {
-				fmt.Printf("      %-12s %s → %s\n", f, short(c.OldValue[i]), short(c.NewValue[i]))
+				fmt.Printf("      %-12s %s -> %s\n", f, short(c.OldValue[i]), short(c.NewValue[i]))
 			}
 		}
 	})
@@ -196,10 +196,10 @@ func printDiff(r *diff.Result, oldID, newID string, explain bool) {
 	})
 
 	if explain {
-		fmt.Printf("\n  edges: +%d / -%d (compared as canonical src→dst[rel] triples)\n",
+		fmt.Printf("\n  edges: +%d / -%d (compared as canonical src->dst[rel] triples)\n",
 			len(r.AppearedEdges), len(r.DisappearedEdges))
 	}
-	fmt.Printf("───────────────────────────────────────────────────────\n")
+	fmt.Printf("-------------------------------------------------------\n")
 }
 
 func section(title string, n int, body func()) {

@@ -281,9 +281,9 @@
 2 node(s) with no inbound anchor:
 
   <span class="a">https://example.com/api/v1/users</span>
-<span class="d">      status 404 · kind page · reachable via js-endpoint</span>
+<span class="d">      status 404, kind page, reachable via js-endpoint</span>
   <span class="a">https://example.com/search</span>
-<span class="d">      status 404 · kind page · reachable via form-action</span></pre>
+<span class="d">      status 404, kind page, reachable via form-action</span></pre>
       </article>
 
       <article class="card">
@@ -294,9 +294,9 @@
 <pre class="out"><span class="c">recongraph query latest --path-to /blog/post-1.html</span>
 2 hop(s) from https://example.com/:
 
-  • https://example.com/
-     └→ https://example.com/blog/
-        └→ <span class="a">https://example.com/blog/post-1.html</span></pre>
+  * https://example.com/
+     `-> https://example.com/blog/
+        `-> <span class="a">https://example.com/blog/post-1.html</span></pre>
       </article>
 
       <article class="card">

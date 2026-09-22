@@ -144,7 +144,7 @@ func queryOrphans(g *sitegraph.Graph) error {
 	for _, n := range orph {
 		via := referenceKinds(g, n.ID)
 		fmt.Printf("  %s\n", n.URL)
-		fmt.Printf("      status %s · kind %s · reachable via %s\n",
+		fmt.Printf("      status %s, kind %s, reachable via %s\n",
 			statusStr(n.StatusCode), n.Kind, via)
 	}
 	return nil
@@ -214,7 +214,7 @@ func queryTech(g *sitegraph.Graph, want string) error {
 			if t.Version != "" {
 				v = " " + t.Version
 			}
-			fmt.Printf("  %s\n      %s%s (confidence %d) — %s\n",
+			fmt.Printf("  %s\n      %s%s (confidence %d) - %s\n",
 				n.URL, t.Name, v, t.Confidence, strings.Join(t.Evidence, "; "))
 			break
 		}
@@ -312,9 +312,9 @@ func queryPathTo(g *sitegraph.Graph, target string) error {
 
 func arrow(i int) string {
 	if i == 0 {
-		return "•"
+		return "*"
 	}
-	return "└→"
+	return "`->"
 }
 
 func queryLinksTo(g *sitegraph.Graph, target string) error {
@@ -351,7 +351,7 @@ func queryComponents(g *sitegraph.Graph) error {
 			fmt.Printf("  ... and %d smaller component(s)\n", len(comps)-10)
 			break
 		}
-		fmt.Printf("  component %d — %d node(s)\n", i+1, len(c))
+		fmt.Printf("  component %d - %d node(s)\n", i+1, len(c))
 		for j, id := range c {
 			if j >= 5 {
 				fmt.Printf("      ... +%d more\n", len(c)-5)

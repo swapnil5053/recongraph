@@ -153,7 +153,7 @@ Seed URLs come from -u (repeatable) or from stdin, one per line.
 		fmt.Fprintf(os.Stderr, "recongraph: crawling %d seed(s), depth %d, %d workers, %.1f req/s per host\n",
 			len(canonSeeds), *depth, *workers, *rate)
 		if *ignoreRobots {
-			fmt.Fprintln(os.Stderr, "recongraph: robots.txt is being IGNORED — make sure you are authorised")
+			fmt.Fprintln(os.Stderr, "recongraph: robots.txt is being IGNORED - make sure you are authorised")
 		}
 	}
 
@@ -229,7 +229,7 @@ func emit(g *sitegraph.Graph, out string, format export.Format) error {
 }
 
 func printSummary(w *os.File, g *sitegraph.Graph, r crawl.Report) {
-	fmt.Fprintf(w, "\n── crawl summary ──────────────────────────────────────\n")
+	fmt.Fprintf(w, "\n-- crawl summary --------------------------------------\n")
 	fmt.Fprintf(w, "  target      %s\n", g.Target)
 	fmt.Fprintf(w, "  status      %s in %s\n", r.Status, r.Duration.Round(time.Millisecond))
 	fmt.Fprintf(w, "  graph       %d nodes, %d edges\n", g.NumNodes(), g.NumEdges())
@@ -243,13 +243,13 @@ func printSummary(w *os.File, g *sitegraph.Graph, r crawl.Report) {
 		sort.Ints(codes)
 		parts := make([]string, 0, len(codes))
 		for _, c := range codes {
-			parts = append(parts, fmt.Sprintf("%d×%d", r.Builder.StatusHist[c], c))
+			parts = append(parts, fmt.Sprintf("%dx%d", r.Builder.StatusHist[c], c))
 		}
 		fmt.Fprintf(w, "  statuses    %s\n", strings.Join(parts, "  "))
 	}
 
 	if orph := g.Orphans(); len(orph) > 0 {
-		fmt.Fprintf(w, "  orphans     %d (no inbound link — see `query --orphans`)\n", len(orph))
+		fmt.Fprintf(w, "  orphans     %d (no inbound link - see `query --orphans`)\n", len(orph))
 	}
 	if hosts := g.ExternalHosts(); len(hosts) > 0 {
 		fmt.Fprintf(w, "  3rd party   %d external hosts\n", len(hosts))
@@ -278,7 +278,7 @@ func printSummary(w *os.File, g *sitegraph.Graph, r crawl.Report) {
 		fmt.Fprintf(w, "  TRUNCATED   %d URLs dropped by --max-queue; the map is incomplete\n",
 			r.Frontier.DroppedQueue)
 	}
-	fmt.Fprintf(w, "───────────────────────────────────────────────────────\n")
+	fmt.Fprintf(w, "-------------------------------------------------------\n")
 }
 
 // collectSeeds reads seeds from -u, or from stdin when no -u was given.

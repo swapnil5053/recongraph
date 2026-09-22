@@ -68,7 +68,7 @@ func Main(args []string) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `ReconGraph %s — web reconnaissance and asset mapping
+	fmt.Fprintf(w, `ReconGraph %s - web reconnaissance and asset mapping
 
 Most crawlers hand you a stream of URLs to grep once and throw away. ReconGraph
 builds a directed graph of a target's web surface, persists it, and lets you
