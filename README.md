@@ -14,7 +14,7 @@ Written in Go. One third-party dependency (`golang.org/x/net/html`), static bina
 
 ## What it's for
 
-I started this after reading through [hakrawler](https://github.com/hakluke/hakrawler) and noticing that it, gospider and katana all share an output model: a stream of URLs you grep once and throw away. That's fine for feeding the next tool in a pipeline, but it loses the structure — which page links to which, what's referenced only from a script, what changed since last week.
+I started this after reading through [hakrawler](https://github.com/hakluke/hakrawler) and noticing that it, gospider and katana all share an output model: a stream of URLs you grep once and throw away. That's fine for feeding the next tool in a pipeline, but it loses the structure: which page links to which, what's referenced only from a script, what changed since last week.
 
 So the crawl here is a means to an end. What you get at the end is a graph you can query:
 
@@ -29,15 +29,36 @@ So the crawl here is a means to an end. What you get at the end is a graph you c
 go install github.com/swapnil5053/recongraph/cmd/recongraph@latest
 ```
 
-From source:
+From source (Go 1.24+):
 
 ```sh
 git clone https://github.com/swapnil5053/recongraph
 cd recongraph
-make build     # ./bin/recongraph
+make build        # ./bin/recongraph
 ```
 
-Needs Go 1.24+.
+No `make` (e.g. plain Windows):
+
+```powershell
+go build -o recongraph.exe ./cmd/recongraph
+.\recongraph.exe version
+```
+
+### Trying it without a target
+
+You need a site you're allowed to crawl. The quickest one is your own machine:
+
+```sh
+cd some/folder/with/html
+python -m http.server 8000
+# in another terminal
+recongraph crawl -u http://127.0.0.1:8000/ --rate 20
+recongraph query latest
+```
+
+Crawls are saved to `~/.recongraph/crawls` (`%USERPROFILE%\.recongraph\crawls`
+on Windows). Set `RECONGRAPH_HOME` or pass `--store` to put them elsewhere.
+Graphviz is only needed for `-f svg`.
 
 ## Usage
 
@@ -194,8 +215,6 @@ ReconGraph output without wanting the crawler.
 
 ## Limitations
 
-Worth being upfront about these:
-
 - **No headless rendering.** A JavaScript-heavy SPA will return almost nothing.
   [katana](https://github.com/projectdiscovery/katana) does this properly and
   will out-crawl ReconGraph on modern front-ends.
@@ -211,20 +230,18 @@ Worth being upfront about these:
 ## Development
 
 ```sh
-make test
-make test-race
+make test         # go test ./...
+make test-race    # go test -race ./...
 make cover
-make lint
-make build
+make lint         # gofmt + go vet
+make release      # static binaries for five platforms in dist/
 ```
-
-`go.mod` has a `replace` pointing `golang.org/x/net` at its GitHub mirror,
-left over from building this behind a proxy that only allowed `github.com`.
-Run `make unpin` once and it's gone.
 
 The heaviest tests are on URL canonicalisation (`pkg/sitegraph/canonical.go`),
 because diff quality depends on it almost entirely: normalise too little and
 every crawl looks 100% changed, too much and real changes vanish.
+`internal/cli/cli_test.go` runs the real binary's code path end to end against
+a two-version test server: crawl, crawl again, then list, query, diff and export.
 
 ## Prior art
 

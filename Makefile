@@ -34,12 +34,6 @@ lint: ## gofmt check and go vet
 	@echo "== go vet =="
 	go vet ./...
 
-.PHONY: unpin
-unpin: ## Remove the sandbox-only replace directive (run once, needs network)
-	go mod edit -dropreplace=golang.org/x/net
-	go mod tidy
-	go build ./... && go test ./... >/dev/null && echo "unpinned: go.mod now uses golang.org/x/net directly"
-
 .PHONY: tidy
 tidy:
 	go mod tidy

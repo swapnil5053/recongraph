@@ -2,12 +2,12 @@
 
 - **Status:** Accepted, partially superseded by [ADR-0002](0002-persistence-and-dependencies.md) (storage backend, CLI framework, signature format)
 - **Date:** 2026-09-13
-- **Context:** Successor to `hakluke/hakrawler` (audited separately — see `AUDIT-hakrawler.md`)
+- **Context:** Successor to `hakluke/hakrawler` (notes in [`AUDIT-hakrawler.md`](../AUDIT-hakrawler.md))
 - **Author:** Swapnil Kumar
 
 ---
 
-## Part A — Scope: keep vs rebuild
+## Part A: what to keep, what to rebuild
 
 ### Clean-room, not a fork
 
@@ -22,9 +22,9 @@ The audit found 231 lines of real logic in one `package main` file, a 2022 pseud
 | Crawl loop | fetch → parse → enqueue discovered → repeat | becomes an explicit frontier + bounded worker pool, not Colly's opaque internal queue |
 | stdin composability | `cat urls.txt \| recongraph crawl` must work, and default stdout must stay greppable one-URL-per-line | but stdin is now *one* input mode, not the only one; `-u/--url`, `--input-file`, and a config profile are added. hakrawler's hard exit when stdin is a TTY is a usability bug, not a philosophy |
 
-### Rebuilding — confirmed, with one correction
+### Rebuilding
 
-The rebuild list holds up, with one correction to my own assumption:
+My starting list held up except for one wrong assumption:
 
 > **"Link/asset discovery (proper HTML parser, not regex)"**
 
@@ -32,15 +32,15 @@ hakrawler already uses a proper HTML parser: Colly → goquery → `x/net/html`.
 
 Everything else on the rebuild list stands: proper Go layout, bounded worker pool with backpressure, real HTTP client with rate limiting and retries, structured output system.
 
-### Adding new — accepted, with three amendments
+### Adding
 
-**1. Add a fifth subcommand: `query`.** The original plan was `crawl`, `diff`, `fingerprint`, `export`. But the whole premise is that a crawl leaves a queryable artifact, and if the only way to interrogate it is to open the database by hand then the tool never demonstrates its own point. `query --orphans`, `--hubs`, `--external`, `--tech`, `--path-to`, plus a `--sql` escape hatch. Small amount of code.
+**1. Add a fifth subcommand: `query`.** The original plan was `crawl`, `diff`, `fingerprint`, `export`. But if a crawl is supposed to leave something queryable behind, the tool has to be able to query it; opening the database by hand doesn't count. `query --orphans`, `--hubs`, `--external`, `--tech`, `--path-to`, plus a `--sql` escape hatch. Small amount of code.
 
 **2. `fingerprint` as a standalone subcommand is borderline.** Fingerprinting is a property of a fetched response, so it should run inline during `crawl` and attach to nodes. Keeping the subcommand only for "fingerprint one URL without crawling" is fine, but it has to be a thin wrapper. Two fingerprinting code paths would be a mistake.
 
 **3. SVG export: no layout engine.** Graph layout is a hard, solved problem and not what this project is about. Emit DOT as the primary graph format and shell out to Graphviz for SVG, with a clear error if `dot` is missing. A self-contained HTML export with a small embedded force-directed view covers the case where Graphviz is not installed. Zero engineering budget for layout algorithms.
 
-### Deliberately out of scope for v1 — say this out loud
+### Out of scope for v1
 
 - **Headless / JS-rendered crawling.** Large lift: browser lifecycle, resource limits, XHR interception. Deferred, and the README should say so rather than leave it implied.
 - **Passive source integration** (Wayback, CommonCrawl, VirusTotal). gospider does this; it is API plumbing, not architecture. Low signal for the effort.
@@ -48,7 +48,7 @@ Everything else on the rebuild list stands: proper Go layout, bounded worker poo
 
 ---
 
-## Part B — The decisions
+## Part B: decisions
 
 ## 1. Project structure and Go package layout
 
@@ -120,9 +120,9 @@ Three goroutine roles, connected by four bounded channels. One rule governs the 
 | `candidateCh` | workers → frontier | `[]Candidate` (batched per page) | `2 × workers` |
 | `doneCh` | frontier → all | close-only, termination signal | — |
 
-### The two decisions that actually matter here
+### Two details
 
-**(a) Deadlock avoidance in a cyclic pipeline.** Workers feed the frontier, and the frontier feeds workers. With bounded channels on both legs, the naive implementation deadlocks: every worker blocks sending to a full `candidateCh` while the frontier blocks sending to a full `readyCh`. The fix is that **the frontier goroutine never blocks on a single operation** — its main loop is a `select` over *send-to-`readyCh`* and *receive-from-`candidateCh`* simultaneously:
+**(a) Deadlock avoidance in a cyclic pipeline.** Workers feed the frontier, and the frontier feeds workers. With bounded channels on both legs, the naive implementation deadlocks. Every worker blocks sending to a full `candidateCh` while the frontier blocks sending to a full `readyCh`. The fix is that **the frontier goroutine never blocks on a single operation**: its main loop is a `select` over *send-to-`readyCh`* and *receive-from-`candidateCh`* simultaneously:
 
 ```go
 for {
@@ -138,9 +138,9 @@ for {
 }
 ```
 
-The nil-channel trick (a `nil` channel in a `select` case blocks forever, disabling that arm) means an empty queue simply stops offering work without a separate state machine. This is the single piece of code in the project worth being able to draw on a whiteboard.
+The nil-channel trick (a `nil` channel in a `select` case blocks forever, disabling that arm) means an empty queue simply stops offering work without a separate state machine.
 
-**(b) Termination detection.** A `sync.WaitGroup` cannot terminate this pipeline, because work is generated *by* the work — the graph is cyclic and you don't know the total in advance. Use an explicit in-flight counter owned by the frontier: incremented when a task is dispatched, decremented when the builder confirms a page fully processed. **Crawl is complete when `queue.Len() == 0 && inflight == 0`.** The frontier then closes `doneCh`; workers drain and exit; the builder flushes and closes.
+**(b) Termination detection.** A `sync.WaitGroup` cannot terminate this pipeline, because work is generated *by* the work. The graph is cyclic and you don't know the total in advance. Use an explicit in-flight counter owned by the frontier: incremented when a task is dispatched, decremented when the builder confirms a page fully processed. **Crawl is complete when `queue.Len() == 0 && inflight == 0`.** The frontier then closes `doneCh`; workers drain and exit; the builder flushes and closes.
 
 ### Backpressure
 
@@ -148,11 +148,11 @@ Backpressure is the bounded channels themselves. A slow builder fills `resultCh`
 
 ### Rate limiting placement
 
-Per-host rate limiting lives **inside `fetch`, not in the pool**, as a `map[string]*rate.Limiter` (`golang.org/x/time/rate`) behind a `sync.RWMutex`. This is deliberate: worker count controls *parallelism* (a resource-consumption bound), the limiter controls *politeness per target* (a behavioural bound). Conflating them — hakrawler's mistake — means you cannot crawl 50 hosts fast while staying gentle on each one. Workers block in `limiter.Wait(ctx)`, which is correct: a blocked worker is applying backpressure, not wasting anything.
+Per-host rate limiting lives **inside `fetch`, not in the pool**, as a `map[string]*rate.Limiter` (`golang.org/x/time/rate`) behind a `sync.RWMutex`. This is deliberate: worker count controls *parallelism* (a resource-consumption bound), the limiter controls *politeness per target* (a behavioural bound). Conflating them, as hakrawler does, means you cannot crawl 50 hosts fast while staying gentle on each one. Workers block in `limiter.Wait(ctx)`, which is correct: a blocked worker is applying backpressure, not wasting anything.
 
 ### Cancellation and partial results
 
-`context.Context` threads from `cmd` through every layer. SIGINT triggers `cancel()`, and the builder **still flushes what it has to SQLite before exiting**, tagged `status='interrupted'`. A recon tool that throws away 40 minutes of crawl because you hit Ctrl-C is a broken recon tool. This directly answers audit defects (a) and (b) — no leaked workers, no `recover()`-as-flow-control, because everything has one shared cancellation root.
+`context.Context` threads from `cmd` through every layer. SIGINT triggers `cancel()`, and the builder **still flushes what it has to SQLite before exiting**, tagged `status='interrupted'`. A recon tool that throws away 40 minutes of crawl because you hit Ctrl-C is a broken recon tool. This covers audit defects (a) and (b): no leaked workers, no `recover()`-as-flow-control, because everything has one shared cancellation root.
 
 ---
 
@@ -173,7 +173,7 @@ Structure that a list physically cannot represent:
 
 And the decisive one: **diff over a graph is a different thing from diff over a set.** Set diff says *"3 URLs appeared, 1 disappeared."* Graph diff says *"the checkout page now references `api-v2.internal.corp`, and nothing links to `/legacy/upload` any more even though it still returns 200."* The second is a finding. The first is a changelog.
 
-**Costs:** memory grows with edges not just pages, and a large site is edge-heavy — hence `--max-pages`, `--max-queue`, and interning URL strings into integer node IDs at insert. Cycles mean every traversal needs a visited set. And a graph is over-engineering for the "just give me a URL list" use case — which is exactly why default stdout stays a plain URL stream and the graph is what's *persisted*, not what's *printed*.
+**Costs:** memory grows with edges not just pages, and a large site is edge-heavy, hence `--max-pages`, `--max-queue`, and interning URL strings into integer node IDs at insert. Cycles mean every traversal needs a visited set. And a graph is over-engineering for the "just give me a URL list" use case, which is why default stdout stays a plain URL stream and the graph is what's *persisted*, not what's *printed*.
 
 ---
 
@@ -187,9 +187,9 @@ And the decisive one: **diff over a graph is a different thing from diff over a 
 
 **The compromise:** builder accumulates and flushes every N nodes or T seconds inside one transaction. Crash or Ctrl-C loses at most one batch. Batched inserts in a single transaction are the difference between ~1k and ~100k rows/sec in SQLite; this is not a micro-optimisation, it is the whole reason the design works.
 
-### Driver choice — a real tradeoff worth documenting
+### Driver choice
 
-Use **`modernc.org/sqlite`** (pure Go), not `mattn/go-sqlite3` (CGO). `mattn` is faster. But CGO breaks `CGO_ENABLED=0` static builds and makes cross-compilation to linux/darwin/windows-arm64 painful — and the entire distribution story for a Go recon tool is *"download one static binary, or `go install`, no dependencies."* Trading insert speed for single-binary cross-compilation is the right call for a tool whose whole distribution story is "download one file".
+Use **`modernc.org/sqlite`** (pure Go), not `mattn/go-sqlite3` (CGO). `mattn` is faster. But CGO breaks `CGO_ENABLED=0` static builds and makes cross-compilation to linux/darwin/windows-arm64 painful. For a Go recon tool the distribution story is "download one static binary, or `go install`", so I'd rather give up insert speed.
 
 ### Schema
 
@@ -203,17 +203,17 @@ findings(id, crawl_id, node_id, kind, value, evidence)      -- passive discovery
 techs(id, crawl_id, node_id, name, version, confidence, evidence)
 ```
 
-Indexes on `(crawl_id, url_canonical)`, `(crawl_id, host)`, `edges(crawl_id, src_node_id)`, `edges(crawl_id, dst_node_id)`. Migrations as numbered embedded SQL via `go:embed`, applied on open — never auto-migrate destructively.
+Indexes on `(crawl_id, url_canonical)`, `(crawl_id, host)`, `edges(crawl_id, src_node_id)`, `edges(crawl_id, dst_node_id)`. Migrations as numbered embedded SQL via `go:embed`, applied on open, never destructively.
 
 ### Diff mode
 
 Two `crawl_id`s in one database. Three classes, all expressible in SQL:
 
-- **appeared / disappeared** — `EXCEPT` on the `url_canonical` sets, both for nodes and for `(src_url, dst_url, rel)` edge triples.
-- **changed** — same canonical URL, different `status_code`, `content_type`, `content_hash`, or tech set.
-- **restructured** — same node, different in/out edge set. This is the class no flat tool can report.
+- **appeared / disappeared**: `EXCEPT` on the `url_canonical` sets, both for nodes and for `(src_url, dst_url, rel)` edge triples.
+- **changed**: same canonical URL, different `status_code`, `content_type`, `content_hash`, or tech set.
+- **restructured**: same node, different in/out edge set. This is the class no flat tool can report.
 
-**The load-bearing detail is URL canonicalisation.** Diff quality is almost entirely a function of it: lowercase scheme and host, strip default ports, resolve dot segments, drop fragments, sort query parameters, strip a configurable session/tracking list (`--strip-params`). Get it wrong and every crawl diffs as 100% changed. It lives in `pkg/sitegraph` and needs table-driven tests, 40+ cases.
+**Everything here depends on URL canonicalisation.** Diff quality is almost entirely a function of it: lowercase scheme and host, strip default ports, resolve dot segments, drop fragments, sort query parameters, strip a configurable session/tracking list (`--strip-params`). Get it wrong and every crawl diffs as 100% changed. It lives in `pkg/sitegraph` and needs table-driven tests, 40+ cases.
 
 ---
 
@@ -234,9 +234,9 @@ Two `crawl_id`s in one database. Three classes, all expressible in SQL:
   implies: [PHP, MySQL]
 ```
 
-**Matcher types:** response header, cookie name, `<meta name=generator>`, script `src` pattern, body regex, URL path, favicon hash. **Scoring:** weights sum per technology, report above a threshold with a confidence value; `implies` cascades (WordPress → PHP); version captured via a named capture group. Never report a boolean where you can report a confidence and the evidence string — "detected X because header Y matched Z" is what makes the output trustworthy.
+**Matcher types:** response header, cookie name, `<meta name=generator>`, script `src` pattern, body regex, URL path, favicon hash. **Scoring:** weights sum per technology, report above a threshold with a confidence value; `implies` cascades (WordPress → PHP); version captured via a named capture group. Report a confidence and the evidence string rather than a boolean; "detected X because header Y matched Z" is something you can check.
 
-**Passive by default, active behind a flag.** Everything above except `probes` runs on responses the crawler already fetched — zero extra requests. Path probes (`/wp-admin/`, `/.git/HEAD`, `/server-status`) are extra requests to paths you were not linked to, which is a different legal and ethical posture. `--probe` opt-in, rate-limited through the same per-host limiter, with a hard per-host probe budget. That boundary is deliberate and should stay documented.
+**Passive by default, active behind a flag.** Everything above except `probes` runs on responses the crawler already fetched, so no extra requests. Path probes (`/wp-admin/`, `/.git/HEAD`, `/server-status`) are extra requests to paths you were not linked to, which is a different legal and ethical posture. `--probe` opt-in, rate-limited through the same per-host limiter, with a hard per-host probe budget. 
 
 **Fingerprints attach to nodes, not to the site.** A CDN-fronted marketing page and a Django admin under the same host are different nodes with different tech. Per-node fingerprints are what make `recongraph query --tech` and tech-drift diffing possible; a site-level verdict cannot do either.
 
@@ -246,7 +246,7 @@ Two `crawl_id`s in one database. Three classes, all expressible in SQL:
 
 ## 6. Differentiation vs hakrawler, gospider, katana
 
-First, a correction to my own plan: it listed technology fingerprinting as a novel feature. **Katana already ships technology detection (`-td`).** It is table stakes, not a differentiator, and claiming otherwise in front of anyone who uses ProjectDiscovery tooling would be embarrassing.
+First, a correction to my own plan: it listed technology fingerprinting as a novel feature. **Katana already ships technology detection (`-td`).** It is table stakes, not a differentiator.
 
 | | hakrawler | gospider | katana | **ReconGraph** |
 |---|---|---|---|---|
@@ -276,7 +276,7 @@ The bottom three rows of the table are the project. Everything above them is tab
 
 1. **Canonicalisation is the diff feature's single point of failure.** Under-normalise → everything looks changed; over-normalise → real changes vanish. Mitigation: exhaustive table-driven tests, `--strip-params` configurable, ship a `diff --explain` that shows the canonical forms it compared.
 2. **Graph memory on large targets.** Mitigation: integer node IDs with an interned URL table, `--max-pages` / `--max-queue` defaults set low (10k), explicit reporting when a budget truncates a crawl.
-3. **JS coverage gap is real.** Modern SPAs will make ReconGraph look weak against katana. Mitigation: be first to say it; regex endpoint extraction from `.js` bodies in v1 buys back a meaningful fraction for a day's work.
+3. **JS coverage gap is real.** Modern SPAs will make ReconGraph look weak against katana. Mitigation: say so in the README; regex endpoint extraction from `.js` bodies in v1 buys back a meaningful fraction for a day's work.
 4. **Ethics and legal.** Active probes and unthrottled crawling against hosts I don't own. Mitigation: robots.txt respected by default with a documented flag to disable it, conservative rate limits, a README statement on authorised testing, and probes off by default.
 5. **Scope creep.** Five subcommands, four export formats, a signature database and a diff engine is a lot. Sequence: graph and crawl and JSON/DOT export first, solid, before storage; storage before diff; diff before fingerprinting. A finished three-feature tool beats a half-finished seven-feature one.
 6. **Naming.** Check "ReconGraph" against pkg.go.dev and GitHub before committing to a module path. Renaming a published Go module is unpleasant.
@@ -285,7 +285,7 @@ The bottom three rows of the table are the project. Everything above them is tab
 
 ## Consequences
 
-**Positive:** every audit defect is structurally prevented rather than patched — leaks by `context`, races by single-owner-graph, scope escape by structural comparison, silent loss by persistence. The layout is idiomatic and testable without a network. The graph model creates three features (diff, query, structural analysis) that no comparable Go tool has.
+**Positive:** every audit defect is prevented by structure rather than patched: leaks by `context`, races by single-owner-graph, scope escape by structural comparison, silent loss by persistence. The layout is idiomatic and testable without a network. The graph model creates three features (diff, query, structural analysis) that no comparable Go tool has.
 
 **Negative:** a lot more code than hakrawler's 231 lines, realistically 3-5k. The frontier/builder split is more machinery than a `sync.WaitGroup` crawler needs and is only justified by graph ownership and termination. Pure-Go SQLite is slower than CGO. No headless means weak SPA coverage.
 
