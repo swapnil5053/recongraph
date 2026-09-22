@@ -1,40 +1,36 @@
 # ReconGraph
 
-[![CI](https://github.com/swapnil5053/recongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/swapnil5053/recongraph/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/swapnil5053/recongraph)](https://github.com/swapnil5053/recongraph/releases)
-[![Go](https://img.shields.io/badge/go-1.24-00ADD8)](go.mod)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-A web crawler that maps a site as a directed graph, saves every crawl, and tells you what changed between them.
+A web crawler that maps a site as a graph, saves every crawl, and tells you what changed between them. Written in Go.
 
 ![HTML export of a 150-page crawl of books.toscrape.com](docs/images/graph.png)
 
-Crawlers like hakrawler, gospider and katana print a stream of URLs you grep once and throw away. ReconGraph keeps the structure: which page links to which, what's only reachable from a script, which third-party hosts load code, and what moved since last week.
+Most recon crawlers (hakrawler, gospider, katana) print a list of URLs you grep once and throw away. ReconGraph keeps the structure: which page links to which, what's only reachable from a script, which third-party hosts load code, and what moved since the last crawl.
 
 ## Quick start
 
 ```sh
 go install github.com/swapnil5053/recongraph/cmd/recongraph@latest
-# or grab a binary from the releases page
 
 recongraph crawl -u https://books.toscrape.com/ --max-pages 150
 recongraph query latest --hubs 5          # most-linked pages
 recongraph query latest --orphans         # pages nothing links to
-recongraph query latest --path-to /admin  # click path from the home page
+recongraph query latest --path-to /admin  # click path from the start page
 recongraph diff latest~1 latest           # what changed since the last crawl
 recongraph export latest -f html -o map.html
 ```
 
-## What it does
+Prebuilt binaries for Windows, macOS and Linux are on the [releases page](https://github.com/swapnil5053/recongraph/releases).
 
-- **Graph, not a list.** Pages, scripts, images, forms and API endpoints are nodes; links, redirects, script loads and JS calls are typed edges.
-- **Stored and diffable.** Every crawl is saved as gzipped JSON. `diff` reports pages that appeared, disappeared or changed, plus *restructured* pages: same URL and status, different outgoing links.
-- **Queries.** Hubs, orphans, shortest click path, third-party hosts, connected components, tech stack, status codes.
-- **Finds endpoints in JavaScript** with a small lexer rather than regex, so comments, escaped slashes and regex literals don't fool it. URLs built at runtime come back as partials like `/api/users/{}`.
-- **Fingerprints 64 technologies** per page, with a confidence score and the evidence for each match.
-- **Passive findings:** emails, cloud buckets, secret-shaped strings, internal hostnames.
-- **Exports** to JSON, CSV, Graphviz DOT/SVG, and a self-contained interactive HTML map.
-- **Polite by default:** respects robots.txt, rate-limits per host, backs off on 429/503, caps pages.
+## Features
+
+- **Graph model.** Pages, scripts, images, forms and API endpoints are nodes. Links, redirects, script loads and JS calls are typed edges.
+- **Crawl history and diff.** Each crawl is saved as gzipped JSON. `diff` reports pages that appeared, disappeared or changed, and pages that kept their URL and status but changed what they link to or load.
+- **Queries** over the saved graph: hubs, orphans, shortest click path, third-party hosts, connected components, tech stack, status codes.
+- **JavaScript endpoint extraction** with a small lexer instead of regex. Comments, escaped slashes and regex literals don't cause false hits, and URLs built at runtime come back as partials like `/api/users/{}`.
+- **Technology fingerprinting** for 64 technologies, per page, with a confidence score and the evidence behind each match.
+- **Passive findings:** emails, cloud storage buckets, secret-shaped strings, internal hostnames.
+- **Exports:** JSON, CSV, Graphviz DOT and SVG, and a self-contained interactive HTML map.
+- **Safe defaults:** respects robots.txt, rate-limits per host, backs off on 429 and 503, caps crawl size.
 
 ## How it works
 
@@ -46,24 +42,24 @@ seeds ─▶ FRONTIER ──tasks──▶ WORKERS (N) ──results──▶ BU
              └──────────────── new URLs ─────────────────────────┘
 ```
 
-The pipeline is a cycle of bounded channels, which deadlocks if the frontier ever waits on a single operation. It never does: its `select` offers the send and the receive together, with a nil channel disabling the send when the queue is empty. The crawl ends when the queue is empty and nothing is in flight; a `WaitGroup` can't express that because the crawl creates its own work. The builder is the only goroutine that touches the graph, so the graph has no locks.
+The stages form a cycle of bounded channels, which deadlocks if the frontier ever blocks on a single operation. Its `select` offers the send and the receive together, with a nil channel disabling the send when the queue is empty, so it always drains. The crawl ends when the queue is empty and nothing is in flight, since a `WaitGroup` can't track work that creates more work. Only the builder goroutine writes to the graph, so the graph needs no locks.
 
-## Engineering notes
+## Engineering
 
-- **One dependency** (`golang.org/x/net/html`), no cgo, static binaries for five platforms.
-- **URL canonicalisation** is the most heavily tested code, because diff quality depends on it: normalise too little and every crawl looks changed, too much and real changes vanish.
-- **122 tests and a fuzz target**, run with the race detector in CI, including an end-to-end test that crawls a two-version test site and checks the diff.
-- **Decisions are written down:** [ADRs](docs/adr/) cover the architecture, dropping SQLite mid-build, and choosing a lexer over a JS parser.
-- **Bugs found by running it end to end and against a real site** (sitemap pages hidden from orphans, assets ranked as hubs, library comments reported as findings) each have a regression test.
+- One third-party dependency (`golang.org/x/net/html`), no cgo, static binaries for five platforms built by a release workflow.
+- 122 tests and a fuzz target, run under the race detector in CI. The heaviest coverage is on URL canonicalisation, because diff accuracy depends on it.
+- An end-to-end test crawls a test site, changes it, crawls again, and checks the list, query, diff and export output.
+- Running it end to end and against a real site exposed three bugs, each now covered by a regression test: sitemap-only pages missing from orphans, shared assets outranking pages as hubs, and library comments reported as findings.
+- Design decisions, including reversed ones, are written up as [ADRs](docs/adr/).
 
 ## Limitations
 
-- No headless browser, so single-page apps come back nearly empty. [katana](https://github.com/projectdiscovery/katana) handles those.
-- JS analysis doesn't follow variables: `fetch(base + "/x")` isn't resolved.
-- No passive sources (Wayback, certificate transparency), and the graph lives in memory.
+- No headless browser, so single-page apps return very little. [katana](https://github.com/projectdiscovery/katana) handles those.
+- JavaScript variables aren't followed: `fetch(base + "/x")` isn't resolved.
+- No passive sources such as Wayback or certificate transparency logs. The graph is held in memory.
 
-## More
+## Links
 
-[Full usage](docs/usage.md) · [Design decisions](docs/adr/) · [Notes on hakrawler](docs/AUDIT-hakrawler.md) · [Project page](https://swapnil5053.github.io/recongraph/)
+[Usage reference](docs/usage.md) · [Design decisions](docs/adr/) · [Notes on hakrawler](docs/AUDIT-hakrawler.md) · [Project page](https://swapnil5053.github.io/recongraph/)
 
-Started as a rewrite of [hakrawler](https://github.com/hakluke/hakrawler): it keeps the crawl-loop shape and stdin input, but no code. Only crawl sites you own or are allowed to test. MIT licensed.
+ReconGraph began as a rewrite of [hakrawler](https://github.com/hakluke/hakrawler). It keeps the shape of the crawl loop and reading seeds from stdin, but none of the code. Only crawl sites you own or have permission to test. MIT licence.
