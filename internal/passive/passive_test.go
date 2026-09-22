@@ -203,3 +203,19 @@ func TestExtractOnEmptyInput(t *testing.T) {
 		t.Errorf("nil comments produced %v", got)
 	}
 }
+
+// From a crawl of pypi.org: .dev is a public TLD, and package names like
+// com.sbk.dev were being reported as internal hosts.
+func TestInternalHostClassification(t *testing.T) {
+	cases := map[string]bool{
+		"jamesl.dev": false, "com.sbk.dev": false, "dev.to": false, "depot.dev": false,
+		"config.test.js": false, "www.example.com": false,
+		"staging.example.com": true, "api.dev.example.com": true,
+		"db1.corp": true, "printer.local": true, "build.internal": true,
+	}
+	for h, want := range cases {
+		if got := isInternalHost(h); got != want {
+			t.Errorf("isInternalHost(%q) = %v, want %v", h, got, want)
+		}
+	}
+}

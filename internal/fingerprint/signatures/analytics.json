@@ -106,7 +106,7 @@
     "name": "Font Awesome",
     "categories": ["font"],
     "matchers": [
-      { "type": "body", "pattern": "font-?awesome(?:[/.-]([0-9.]+))?", "version": 1, "weight": 70 },
+      { "type": "body", "pattern": "font-?awesome(?:[/.-]v?(\\d{1,2}(?:\\.\\d+){1,2}))?", "version": 1, "weight": 70 },
       { "type": "class", "pattern": "\\bfa[srlbd]?\\s+fa-[a-z-]+", "weight": 50 }
     ]
   },

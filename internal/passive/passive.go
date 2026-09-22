@@ -58,7 +58,7 @@ var (
 	}
 
 	// Private / internal hostnames leaking in comments and config blobs.
-	reInternal  = regexp.MustCompile(`(?i)\b(?:https?://)?((?:[a-z0-9\-]+\.)*(?:internal|intranet|corp|local|localdomain|test|staging|stage|dev|uat|qa)(?:\.[a-z0-9\-]+)*)\b(?::\d{2,5})?`)
+	reHostname  = regexp.MustCompile(`(?i)\b((?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9\-]{1,23})\b`)
 	rePrivateIP = regexp.MustCompile(`\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b`)
 )
 
@@ -128,9 +128,9 @@ func Extract(body []byte, isScript bool) []Result {
 	for _, m := range rePrivateIP.FindAllString(s, 50) {
 		add(KindInternal, m, "")
 	}
-	for _, m := range reInternal.FindAllStringSubmatch(s, 80) {
-		if len(m) > 1 && strings.Contains(m[1], ".") {
-			add(KindInternal, m[1], "")
+	for _, m := range reHostname.FindAllStringSubmatch(s, 2000) {
+		if isInternalHost(m[1]) {
+			add(KindInternal, strings.ToLower(m[1]), "")
 		}
 	}
 
@@ -187,6 +187,45 @@ func endpointEvidence(e jsscan.Endpoint) string {
 		ev += ", built at runtime"
 	}
 	return ev
+}
+
+// Suffixes that never resolve on the public internet.
+var internalTLDs = map[string]bool{
+	"internal": true, "intranet": true, "corp": true, "local": true,
+	"localdomain": true, "lan": true, "test": true,
+}
+
+var fileExt = map[string]bool{
+	"js": true, "mjs": true, "ts": true, "css": true, "json": true, "html": true,
+	"htm": true, "xml": true, "map": true, "png": true, "jpg": true, "svg": true,
+	"gif": true, "txt": true, "md": true, "php": true, "py": true, "go": true,
+}
+
+// Labels that mark a non-production environment when they appear in front of
+// a real domain: staging.example.com, api.dev.example.com.
+var envLabels = map[string]bool{
+	"staging": true, "stage": true, "dev": true, "uat": true, "qa": true,
+	"test": true, "preprod": true, "internal": true, "intranet": true,
+}
+
+// isInternalHost reports whether a hostname points at internal or
+// non-production infrastructure. .dev is a public TLD (so is .app), so
+// jamesl.dev is not internal but dev.jamesl.com is. Env labels need two
+// labels after them so that dev.to stays a public site.
+func isInternalHost(h string) bool {
+	labels := strings.Split(strings.ToLower(h), ".")
+	if len(labels) < 2 || fileExt[labels[len(labels)-1]] {
+		return false // config.test.js is a filename, not a host
+	}
+	if internalTLDs[labels[len(labels)-1]] {
+		return true
+	}
+	for i := 0; i < len(labels)-2; i++ {
+		if envLabels[labels[i]] {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractCSS runs the extractors over a stylesheet with its comments
