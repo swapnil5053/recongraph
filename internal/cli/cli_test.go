@@ -237,3 +237,15 @@ func TestUnknownCommand(t *testing.T) {
 		t.Errorf("got %d %q", code, errOut)
 	}
 }
+
+func TestCrawlOfDeadHostFails(t *testing.T) {
+	store := t.TempDir()
+	// Port 1 on loopback refuses connections.
+	_, errOut, code := capture(t, "crawl", "-u", "http://127.0.0.1:1/", "--store", store, "-q", "--no-sitemap")
+	if code == 0 || !strings.Contains(errOut, "nothing could be fetched") {
+		t.Errorf("got exit %d, stderr %q", code, errOut)
+	}
+	if out, _, _ := capture(t, "list", "--store", store); !strings.Contains(out, "No stored crawls") {
+		t.Errorf("a failed crawl was saved:\n%s", out)
+	}
+}

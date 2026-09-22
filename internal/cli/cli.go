@@ -88,7 +88,7 @@ EXAMPLES
   recongraph crawl -u https://example.com
 
   # Stay in a shell pipeline, hakrawler style
-  cat hosts.txt | recongraph crawl --format urls | httpx
+  cat hosts.txt | recongraph crawl | httpx
 
   # Subdomains in scope, depth 4, save an interactive report
   recongraph crawl -u https://example.com --subs -d 4 -o map.html -f html
@@ -96,7 +96,7 @@ EXAMPLES
   # What changed since last time?
   recongraph diff latest~1 latest
 
-  # Interrogate the graph
+  # Ask the saved graph
   recongraph query latest --orphans
   recongraph query latest --path-to /admin
 

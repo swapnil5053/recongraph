@@ -173,6 +173,18 @@ Seed URLs come from -u (repeatable) or from stdin, one per line.
 	if err != nil {
 		return err
 	}
+	// Every request failed (host down, DNS, TLS): say so and don't save an
+	// empty crawl that a later diff would compare against.
+	if report.Builder.Pages == 0 && report.Builder.Errors > 0 {
+		reason := ""
+		for _, n := range g.Nodes() {
+			if n.Error != "" {
+				reason = ": " + n.Error
+				break
+			}
+		}
+		return fmt.Errorf("nothing could be fetched (%d failed request(s))%s", report.Builder.Errors, reason)
+	}
 
 	if err := emit(g, *out, export.Format(*format)); err != nil {
 		return err
