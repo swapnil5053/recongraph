@@ -193,9 +193,13 @@ func TestEndToEndCrawl(t *testing.T) {
 	// robots.txt must be obeyed: the disallowed path may be recorded as a node
 	// (it was linked) but must never have been fetched.
 	for _, n := range g.Nodes() {
-		if strings.Contains(n.URL, "/private/secret") && n.Fetched && n.Error == "" {
-			t.Error("disallowed path was fetched despite robots.txt")
+		if strings.Contains(n.URL, "/private/secret") && n.Fetched {
+			t.Error("disallowed path is marked fetched")
 		}
+	}
+	// And it counts as skipped, not as an error.
+	if rep.Builder.Blocked != 1 || rep.Builder.Errors != 0 {
+		t.Errorf("blocked=%d errors=%d, want 1 and 0", rep.Builder.Blocked, rep.Builder.Errors)
 	}
 }
 
@@ -512,4 +516,28 @@ func keys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// pypi.org's sitemap index lists 300k+ URLs. They used to all become nodes
+// on a 40-page crawl; now a sitemap contributes at most the page budget.
+func TestHugeSitemapIsCapped(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<html><body><a href="/sitemap.xml">map</a></body></html>`)
+	})
+	mux.HandleFunc("/sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+		for i := 0; i < 5000; i++ {
+			fmt.Fprintf(w, `<url><loc>http://%s/p/%d</loc></url>`, r.Host, i)
+		}
+		fmt.Fprint(w, `</urlset>`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	g, _ := runCrawl(t, srv, func(o *Options) { o.MaxPages = 20; o.UseSitemap = false })
+	if n := g.NumNodes(); n > 100 {
+		t.Errorf("graph has %d nodes from a 5000-URL sitemap with a 20-page budget", n)
+	}
 }

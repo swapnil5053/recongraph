@@ -89,11 +89,10 @@ func Run(ctx context.Context, opts Options) (*sitegraph.Graph, Report, error) {
 	})
 
 	g.Seeds = append([]string(nil), opts.Seeds...)
-	seeds := opts.Seeds
+	f.Seed(b.SeedCandidates(opts.Seeds))
 	if opts.UseSitemap {
-		seeds = append(seeds, discoverFromSitemaps(ctx, client, opts)...)
+		f.Seed(b.SitemapCandidates(discoverFromSitemaps(ctx, client, opts)))
 	}
-	f.Seed(b.SeedCandidates(seeds))
 
 	results := make(chan *builder.Result, opts.Workers*2)
 
@@ -186,10 +185,12 @@ func (w *worker) process(ctx context.Context, task frontier.Task) *builder.Resul
 	}
 
 	if w.engine != nil {
-		in := fingerprint.Input{
-			Header:  resp.Header,
-			Body:    resp.Body,
-			URLPath: base.Path,
+		in := fingerprint.Input{Header: resp.Header, URLPath: base.Path}
+		// Body matchers only mean something on pages, scripts and styles. A
+		// sitemap listing a package called "fontawesome" isn't Font Awesome.
+		if parse.IsHTML(resp.ContentType) || parse.IsScript(resp.ContentType) ||
+			strings.Contains(resp.ContentType, "css") || isJSPath(base.Path) {
+			in.Body = resp.Body
 		}
 		if res.Page != nil {
 			in.Metas = res.Page.Metas
@@ -246,7 +247,18 @@ func (w *worker) processScript(res *builder.Result, resp *fetch.Response, base *
 
 func (w *worker) processXML(res *builder.Result, resp *fetch.Response, base *url.URL) {
 	pages, indexes := parse.Sitemap(resp.Body)
-	for _, raw := range append(pages, indexes...) {
+	// A big site's sitemap index can list hundreds of thousands of URLs
+	// (pypi.org lists 300k+). Recording all of them as nodes blows up the
+	// graph for pages the page budget will never reach anyway.
+	limit := w.opts.MaxPages
+	if limit <= 0 {
+		limit = 10000
+	}
+	refs := append(pages, indexes...)
+	if len(refs) > limit {
+		refs = refs[:limit]
+	}
+	for _, raw := range refs {
 		canon, err := sitegraph.Resolve(base, raw, w.opts.Canon)
 		if err != nil {
 			continue
@@ -284,42 +296,61 @@ func (w *worker) canonicalizeAll(raws []string) []string {
 	return out
 }
 
-// discoverFromSitemaps seeds from robots.txt Sitemap: directives and
-// /sitemap.xml before any link is followed.
+// discoverFromSitemaps collects page URLs from /sitemap.xml and any
+// Sitemap: lines in robots.txt before the crawl starts.
+//
+// Sitemap indexes are followed here, not handed to the frontier, and only a
+// few files deep: on a site like pypi.org the index points at dozens of
+// files with 300k+ URLs, and fetching them as ordinary pages used up the
+// whole page budget on XML. Sitemap pages get at most half the budget so
+// the link crawl still has room.
 func discoverFromSitemaps(ctx context.Context, client *fetch.Client, opts Options) []string {
+	const maxSitemapFiles = 4
+	limit := 1000
+	if opts.MaxPages > 0 {
+		limit = opts.MaxPages / 2
+		if limit < 1 {
+			limit = 1
+		}
+	}
+
 	var extra []string
 	seen := map[string]bool{}
+	fetched := 0
 
 	for _, seed := range opts.Seeds {
 		u, err := url.Parse(seed)
 		if err != nil {
 			continue
 		}
-		origin := u.Scheme + "://" + u.Host
-		candidates := append([]string{origin + "/sitemap.xml"}, client.Sitemaps(ctx, u)...)
+		queue := append([]string{u.Scheme + "://" + u.Host + "/sitemap.xml"}, client.Sitemaps(ctx, u)...)
 
-		for _, sm := range candidates {
+		for len(queue) > 0 && fetched < maxSitemapFiles && len(extra) < limit {
+			sm := queue[0]
+			queue = queue[1:]
 			if seen[sm] {
 				continue
 			}
 			seen[sm] = true
+			fetched++
 			resp, err := client.Get(ctx, sm)
 			if err != nil || resp.StatusCode != 200 {
 				continue
 			}
 			pages, indexes := parse.Sitemap(resp.Body)
-			for _, p := range append(pages, indexes...) {
+			queue = append(queue, indexes...)
+			for _, p := range pages {
 				canon, err := sitegraph.Canonicalize(p, opts.Canon)
 				if err != nil || seen[canon] {
 					continue
 				}
-				if opts.Rules.Check(canon, 0) != scope.Crawl {
+				if opts.Rules.Check(canon, 1) != scope.Crawl {
 					continue
 				}
 				seen[canon] = true
 				extra = append(extra, canon)
-				if opts.MaxPages > 0 && len(extra) >= opts.MaxPages {
-					return extra
+				if len(extra) >= limit {
+					break
 				}
 			}
 		}

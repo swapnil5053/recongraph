@@ -6,6 +6,7 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"time"
 
@@ -41,6 +42,7 @@ type Result struct {
 type Stats struct {
 	Pages      int
 	Errors     int
+	Blocked    int // skipped because robots.txt disallows them
 	Edges      int
 	Findings   int
 	External   int
@@ -89,6 +91,18 @@ func (b *Builder) SeedCandidates(urls []string) []frontier.Candidate {
 	return out
 }
 
+// SitemapCandidates adds pages found in a sitemap one level below the seeds:
+// they weren't asked for directly, and they shouldn't jump ahead of links
+// from the start page.
+func (b *Builder) SitemapCandidates(urls []string) []frontier.Candidate {
+	out := make([]frontier.Candidate, 0, len(urls))
+	for _, u := range urls {
+		b.graph.EnsureNode(u, sitegraph.KindPage, 1, false)
+		out = append(out, frontier.Candidate{URL: u, Depth: 1, Kind: sitegraph.KindPage})
+	}
+	return out
+}
+
 // Run consumes results until the channel closes or ctx is cancelled.
 //
 // Order matters: graph, then candidates, then the completion tick. If the tick
@@ -125,6 +139,14 @@ func (b *Builder) Run(ctx context.Context, results <-chan *Result, f *frontier.F
 func (b *Builder) apply(res *Result) []frontier.Candidate {
 	srcID, _ := b.graph.EnsureNode(res.Task.URL, res.Task.Kind, res.Task.Depth, false)
 
+	if errors.Is(res.Err, fetch.ErrDisallowed) {
+		// Not fetched, so not a failure either; the node keeps the reason.
+		if n := b.graph.Node(srcID); n != nil {
+			n.Error = res.Err.Error()
+		}
+		b.stats.Blocked++
+		return nil
+	}
 	if res.Err != nil {
 		b.graph.SetNodeResult(srcID, 0, "", 0, "", "", res.Err.Error())
 		b.stats.Errors++
