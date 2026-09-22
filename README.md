@@ -1,316 +1,69 @@
 # ReconGraph
 
-A web crawler that builds a directed graph of a site instead of printing a list of URLs, stores each crawl, and diffs them.
+[![CI](https://github.com/swapnil5053/recongraph/actions/workflows/ci.yml/badge.svg)](https://github.com/swapnil5053/recongraph/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/swapnil5053/recongraph)](https://github.com/swapnil5053/recongraph/releases)
+[![Go](https://img.shields.io/badge/go-1.24-00ADD8)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+A web crawler that maps a site as a directed graph, saves every crawl, and tells you what changed between them.
 
 ![HTML export of a 150-page crawl of books.toscrape.com](docs/images/graph.png)
 
-<sub>`-f html` export of a crawl of [books.toscrape.com](https://books.toscrape.com), a site built for crawler practice. See [Example run](#example-run).</sub>
+Crawlers like hakrawler, gospider and katana print a stream of URLs you grep once and throw away. ReconGraph keeps the structure: which page links to which, what's only reachable from a script, which third-party hosts load code, and what moved since last week.
 
-```sh
-recongraph crawl -u https://example.com
-recongraph query latest --orphans
-recongraph diff latest~1 latest
-```
-
-Written in Go. One third-party dependency (`golang.org/x/net/html`), static binary, no cgo.
-
-## What it's for
-
-I started this after reading through [hakrawler](https://github.com/hakluke/hakrawler) and noticing that it, gospider and katana all share an output model: a stream of URLs you grep once and throw away. That's fine for feeding the next tool in a pipeline, but it loses the structure: which page links to which, what's referenced only from a script, what changed since last week.
-
-So the crawl here is a means to an end. What you get at the end is a graph you can query:
-
-- which pages are hubs (ranked by inbound links) and which are orphans (nothing anchors to them)
-- how many clicks a given path is from the front door
-- every third-party host the site loads script from
-- what appeared, disappeared or moved since the last crawl
-
-## Install
-
-Prebuilt binaries for Linux, macOS and Windows are on the
-[releases page](https://github.com/swapnil5053/recongraph/releases). Or, with Go:
+## Quick start
 
 ```sh
 go install github.com/swapnil5053/recongraph/cmd/recongraph@latest
+# or grab a binary from the releases page
+
+recongraph crawl -u https://books.toscrape.com/ --max-pages 150
+recongraph query latest --hubs 5          # most-linked pages
+recongraph query latest --orphans         # pages nothing links to
+recongraph query latest --path-to /admin  # click path from the home page
+recongraph diff latest~1 latest           # what changed since the last crawl
+recongraph export latest -f html -o map.html
 ```
 
-From source (Go 1.24+):
+## What it does
 
-```sh
-git clone https://github.com/swapnil5053/recongraph
-cd recongraph
-make build        # ./bin/recongraph
-```
-
-No `make` (e.g. plain Windows):
-
-```powershell
-go build -o recongraph.exe ./cmd/recongraph
-.\recongraph.exe version
-```
-
-### Trying it without a target
-
-You need a site you're allowed to crawl. The quickest one is your own machine:
-
-```sh
-cd some/folder/with/html
-python -m http.server 8000
-# in another terminal
-recongraph crawl -u http://127.0.0.1:8000/ --rate 20
-recongraph query latest
-```
-
-Crawls are saved to `~/.recongraph/crawls` (`%USERPROFILE%\.recongraph\crawls`
-on Windows). Set `RECONGRAPH_HOME` or pass `--store` to put them elsewhere.
-Graphviz is only needed for `-f svg`.
-
-## Usage
-
-### crawl
-
-```sh
-# URLs on stdout, graph saved to ~/.recongraph/crawls
-recongraph crawl -u https://example.com
-
-# reads stdin too, so it still drops into a pipeline
-cat hosts.txt | recongraph crawl | httpx
-
-# subdomains in scope, depth 4, interactive report
-recongraph crawl -u https://example.com --subs -d 4 -o map.html -f html
-
-# slow it right down for a production target
-recongraph crawl -u https://example.com --rate 0.5 --burst 1 -c 4
-
-# authenticated, restricted to one section
-recongraph crawl -u https://example.com/app/ \
-  -H "Cookie: session=abc" --path /app --exclude '/logout'
-```
-
-Output formats: `urls` (default), `json`, `adjacency`, `dot`, `svg`, `csv`, `html`.
-
-`svg` shells out to Graphviz if you have it. `html` is a single self-contained
-file with a force-directed view and no CDN references, which is usually more
-useful.
-
-### query
-
-```sh
-recongraph query latest                    # summary
-recongraph query latest --orphans
-recongraph query latest --hubs 20
-recongraph query latest --external         # third-party hosts by reference count
-recongraph query latest --path-to /admin
-recongraph query latest --links-to /login
-recongraph query latest --components       # separate apps sharing one host
-recongraph query latest --tech wordpress
-recongraph query latest --findings secret-like
-recongraph query latest --status 403
-```
-
-`latest` also works as `latest~1`, `latest:example.com`, a full crawl ID, or any
-unique prefix of one.
-
-### diff
-
-```sh
-recongraph list
-recongraph diff latest~1 latest
-recongraph diff latest~1 latest --json --ignore-content
-```
-
-Output is grouped into appeared, disappeared, changed (status, content hash,
-title or detected stack), restructured, third-party hosts, and findings.
-
-"Restructured" is the one that needed the graph: same page, same status code,
-different outbound references. A checkout page that quietly started loading a
-script from a host that wasn't there last month shows up here and nowhere else.
-
-### fingerprint
-
-```sh
-recongraph fingerprint https://example.com
-recongraph fingerprint --list
-```
-
-64 signatures, embedded at build time. During a crawl this runs inline and
-attaches per node rather than per site, because a marketing page behind a CDN
-and a Django admin on the same host don't run the same stack.
-
-Signatures declare optional probe paths (`/wp-admin/`, `/.git/HEAD`). Those are
-requests to URLs nothing linked to, so they're off unless you ask for them.
-
-## Example run
-
-Against books.toscrape.com, capped at 150 pages, 3 requests/second:
-
-```
-$ recongraph crawl -u https://books.toscrape.com/ -d 2 --max-pages 150 --rate 3
-
--- crawl summary --------------------------------------
-  target      https://books.toscrape.com/
-  status      budget-exceeded in 51.347s
-  graph       1158 nodes, 5666 edges
-  fetched     150 pages, 0 errors
-  statuses    150x200
-  3rd party   1 external hosts
-  findings    44 passive findings
-  tech        Bootstrap, Font Awesome, jQuery
-  TRUNCATED   1508 URLs dropped by --max-pages; the map is incomplete
-
-$ recongraph query latest --hubs 3
-    99  https://books.toscrape.com/catalogue/category/books_1/index.html
-    99  https://books.toscrape.com/index.html
-    66  https://books.toscrape.com/catalogue/category/books/philosophy_7/index.html
-
-$ recongraph query latest --external
-    99  ajax.googleapis.com
-```
-
-Two things in this run were wrong and are fixed: `--hubs` ranked the shared
-stylesheet and favicon above every page, and all 44 passive findings were
-contributor emails and GitHub links from comments in a bundled datepicker.
-Hubs now only rank pages, and in scripts and stylesheets the extractors skip
-comments.
+- **Graph, not a list.** Pages, scripts, images, forms and API endpoints are nodes; links, redirects, script loads and JS calls are typed edges.
+- **Stored and diffable.** Every crawl is saved as gzipped JSON. `diff` reports pages that appeared, disappeared or changed, plus *restructured* pages: same URL and status, different outgoing links.
+- **Queries.** Hubs, orphans, shortest click path, third-party hosts, connected components, tech stack, status codes.
+- **Finds endpoints in JavaScript** with a small lexer rather than regex, so comments, escaped slashes and regex literals don't fool it. URLs built at runtime come back as partials like `/api/users/{}`.
+- **Fingerprints 64 technologies** per page, with a confidence score and the evidence for each match.
+- **Passive findings:** emails, cloud buckets, secret-shaped strings, internal hostnames.
+- **Exports** to JSON, CSV, Graphviz DOT/SVG, and a self-contained interactive HTML map.
+- **Polite by default:** respects robots.txt, rate-limits per host, backs off on 429/503, caps pages.
 
 ## How it works
 
 ```
-                    ┌──────────────────────────────────────────┐
-   seeds ──────────▶│           FRONTIER (1 goroutine)         │
-                    │   priority queue · visited set           │
-                    │   depth · in-flight counter              │
-                    └───┬──────────────────────────────▲───────┘
-                        │ ready (bounded)              │ candidates (bounded)
-                        ▼                              │
-        ┌───────────────────────────────────┐          │
-        │         WORKER POOL (N)           │          │
-        │  fetch → parse → passive →        │          │
-        │  fingerprint                      │          │
-        └───────────────┬───────────────────┘          │
-                        │ results (bounded)            │
-                        ▼                              │
-        ┌───────────────────────────────────┐          │
-        │      GRAPH BUILDER (1 goroutine)  │──────────┘
-        │  sole owner of the graph          │
-        └───────────────────────────────────┘
+seeds ─▶ FRONTIER ──tasks──▶ WORKERS (N) ──results──▶ BUILDER ─┐
+          queue, dedup        fetch, parse,            owns the  │
+          in-flight count     fingerprint              graph     │
+             ▲                                                   │
+             └──────────────── new URLs ─────────────────────────┘
 ```
 
-The builder goroutine is the only writer to the graph, so there's no mutex on it
-and scope gets applied in exactly one place.
+The pipeline is a cycle of bounded channels, which deadlocks if the frontier ever waits on a single operation. It never does: its `select` offers the send and the receive together, with a nil channel disabling the send when the queue is empty. The crawl ends when the queue is empty and nothing is in flight; a `WaitGroup` can't express that because the crawl creates its own work. The builder is the only goroutine that touches the graph, so the graph has no locks.
 
-The pipeline is a cycle and every leg is a bounded channel, which is a deadlock
-waiting to happen: the frontier parks on a send to the workers while the builder
-parks on a send back to the frontier. The fix is that the frontier's main loop
-offers both operations in the same `select`, with a nil channel disabling the
-send arm when the queue is empty, so it always drains. `internal/frontier`.
+## Engineering notes
 
-Termination is an in-flight counter rather than a `WaitGroup`, because a crawl
-generates its own work and there's no total to wait on.
-
-Backpressure is just the bounded channels. A slow builder fills the result
-channel, workers block on send, they stop pulling tasks, the frontier backs up.
-
-More detail in [docs/adr/](docs/adr/).
-
-## Site
-
-`site/index.html` is the project page: one static file, no build step. `.github/workflows/pages.yml` deploys it to GitHub Pages on any push that touches `site/`. Turn Pages on in the repo settings with the source set to GitHub Actions.
-
-## Layout
-
-```
-cmd/recongraph/   entry point
-internal/
-  cli/            subcommands
-  scope/          what's in bounds
-  frontier/       queue, dedup, termination
-  fetch/          HTTP client, per-host limiter, retries, robots.txt
-  parse/          HTML and sitemap extraction, no I/O
-  passive/        emails, buckets, endpoints, secrets, internal hosts
-  jsscan/         JavaScript lexer and endpoint extraction
-  fingerprint/    signature engine + embedded database
-  builder/        graph construction
-  crawl/          pipeline wiring
-  store/          persistence
-  diff/           crawl comparison
-  export/         json, dot, csv, html, svg
-pkg/sitegraph/    the graph model, canonical URLs, encoders
-site/             project page (GitHub Pages)
-```
-
-Only `sitegraph` is in `pkg/`, since it's the one thing you'd import to read
-ReconGraph output without wanting the crawler.
-
-## Defaults
-
-- **robots.txt is respected.** Most tools here default the other way. There's an
-  `--ignore-robots` flag for work you're authorised to do, and it warns.
-- 2 requests/second per host, burst 4, with jitter. A host that answers 429 or
-  503 gets its rate halved for the rest of the crawl.
-- `--max-pages 2000`. If a budget truncates a crawl the summary says so and the
-  stored status is `budget-exceeded`.
-- Ctrl-C keeps the partial graph and tags it `interrupted`.
+- **One dependency** (`golang.org/x/net/html`), no cgo, static binaries for five platforms.
+- **URL canonicalisation** is the most heavily tested code, because diff quality depends on it: normalise too little and every crawl looks changed, too much and real changes vanish.
+- **122 tests and a fuzz target**, run with the race detector in CI, including an end-to-end test that crawls a two-version test site and checks the diff.
+- **Decisions are written down:** [ADRs](docs/adr/) cover the architecture, dropping SQLite mid-build, and choosing a lexer over a JS parser.
+- **Bugs found by running it end to end and against a real site** (sitemap pages hidden from orphans, assets ranked as hubs, library comments reported as findings) each have a regression test.
 
 ## Limitations
 
-- **No headless rendering.** A JavaScript-heavy SPA will return almost nothing.
-  [katana](https://github.com/projectdiscovery/katana) does this properly and
-  will out-crawl ReconGraph on modern front-ends.
-- **JS analysis is lexical, not semantic.** `internal/jsscan` tokenises
-  scripts properly (comments, escapes, regex literals, template strings) and
-  picks URLs out of `fetch`/`axios`/`$.ajax`/`xhr.open` calls, `url:`-style
-  properties, and API-shaped string literals. It doesn't follow variables, so
-  `const base = "/api"; fetch(base + "/users")` yields `/api` and nothing
-  for the call itself. Endpoints built at runtime are reported as
-  findings (`/api/users/{}/orders`) but not crawled.
-- **No passive sources.** Nothing from Wayback, Common Crawl or certificate
-  transparency; only what's reachable by crawling.
-- `RootDomain` doesn't know about multi-part public suffixes (`foo.co.uk`). It's
-  only used for display; scope checks compare host labels exactly.
-- The whole graph loads into memory. Fine at the 2k-page default, not designed
-  for 500k.
+- No headless browser, so single-page apps come back nearly empty. [katana](https://github.com/projectdiscovery/katana) handles those.
+- JS analysis doesn't follow variables: `fetch(base + "/x")` isn't resolved.
+- No passive sources (Wayback, certificate transparency), and the graph lives in memory.
 
-## Development
+## More
 
-```sh
-make test         # go test ./...
-make test-race    # go test -race ./...
-make cover
-make lint         # gofmt + go vet
-make release      # static binaries for five platforms in dist/
-```
+[Full usage](docs/usage.md) · [Design decisions](docs/adr/) · [Notes on hakrawler](docs/AUDIT-hakrawler.md) · [Project page](https://swapnil5053.github.io/recongraph/)
 
-The heaviest tests are on URL canonicalisation (`pkg/sitegraph/canonical.go`),
-because diff quality depends on it almost entirely: normalise too little and
-every crawl looks 100% changed, too much and real changes vanish.
-`internal/cli/cli_test.go` runs the real binary's code path end to end against
-a two-version test server: crawl, crawl again, then list, query, diff and export.
-
-## Prior art
-
-The two ideas kept from [hakrawler](https://github.com/hakluke/hakrawler) are
-the shape of the crawl loop and reading seeds from stdin, which is why `urls` is
-still the default output format.
-
-No hakrawler code is used. I read it, wrote up what I found in
-[docs/AUDIT-hakrawler.md](docs/AUDIT-hakrawler.md), and started an empty module.
-It's 231 lines of logic in one file, so there wasn't much to inherit even if I
-had wanted to fork it. The audit also covers four bugs in the original,
-including a `-subs` scope filter that accepts `example.com.attacker.net` as
-in-scope; `TestSameOrSubdomainRejectsScopeEscape` is the regression test for
-that class.
-
-[gospider](https://github.com/jaeles-project/gospider) is where the idea of
-treating sitemap.xml and robots.txt as discovery sources rather than only
-restrictions came from. katana's per-host rate limiting and scope field design
-are both better than my first attempt at either.
-
-## Legal
-
-Only point this at systems you own or are authorised to test. The defaults are
-conservative because it generates real traffic against real infrastructure.
-
-## Licence
-
-MIT. See [LICENSE](LICENSE).
+Started as a rewrite of [hakrawler](https://github.com/hakluke/hakrawler): it keeps the crawl-loop shape and stdin input, but no code. Only crawl sites you own or are allowed to test. MIT licensed.
