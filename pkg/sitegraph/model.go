@@ -260,9 +260,6 @@ func (g *Graph) SetTechs(id NodeID, techs []Tech) {
 func (g *Graph) Orphans() []*Node {
 	// A stylesheet with no anchor pointing at it is normal. A page or an API
 	// endpoint with none is worth looking at.
-	navigable := map[NodeKind]bool{
-		KindPage: true, KindAPI: true, KindForm: true, KindDocument: true,
-	}
 	var out []*Node
 	for _, n := range g.nodes {
 		if n.External || !navigable[n.Kind] {
@@ -301,11 +298,18 @@ func (g *Graph) IsSeed(n *Node) bool {
 	return false
 }
 
-// Hubs returns internal nodes sorted by in-degree, highest first.
+// navigable are the node kinds a person can land on. Orphans and hubs only
+// make sense for these: every page references the same stylesheet, so assets
+// would otherwise top the hub list on any real site.
+var navigable = map[NodeKind]bool{
+	KindPage: true, KindAPI: true, KindForm: true, KindDocument: true,
+}
+
+// Hubs returns internal pages sorted by in-degree, highest first.
 func (g *Graph) Hubs(limit int) []*Node {
 	cp := make([]*Node, 0, len(g.nodes))
 	for _, n := range g.nodes {
-		if !n.External {
+		if !n.External && navigable[n.Kind] {
 			cp = append(cp, n)
 		}
 	}

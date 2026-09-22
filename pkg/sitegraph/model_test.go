@@ -159,6 +159,22 @@ func TestOrphansIncludesSitemapOnlyPages(t *testing.T) {
 	}
 }
 
+// Every page loads the same stylesheet; it must not outrank the pages.
+func TestHubsIgnoreAssets(t *testing.T) {
+	g := New("https://e.com")
+	css, _ := g.EnsureNode("https://e.com/site.css", KindStylesheet, 1, false)
+	home, _ := g.EnsureNode("https://e.com/", KindPage, 0, false)
+	for _, p := range []string{"/a", "/b", "/c"} {
+		id, _ := g.EnsureNode("https://e.com"+p, KindPage, 1, false)
+		g.AddEdge(id, css, RelStylesheet, "")
+		g.AddEdge(id, home, RelHref, "")
+	}
+	hubs := g.Hubs(1)
+	if len(hubs) != 1 || hubs[0].URL != "https://e.com/" {
+		t.Errorf("Hubs(1) = %v, want the home page", urlsOf(hubs))
+	}
+}
+
 func TestShortestPath(t *testing.T) {
 	g := newTestGraph()
 	root, _ := g.Lookup("https://e.com/")
