@@ -2,7 +2,9 @@
 
 A web crawler that builds a directed graph of a site instead of printing a list of URLs, stores each crawl, and diffs them.
 
-![ReconGraph DOT output](docs/images/graph.png)
+![HTML export of a 150-page crawl of books.toscrape.com](docs/images/graph.png)
+
+<sub>`-f html` export of a crawl of [books.toscrape.com](https://books.toscrape.com), a site built for crawler practice. See [Example run](#example-run).</sub>
 
 ```sh
 recongraph crawl -u https://example.com
@@ -137,6 +139,39 @@ and a Django admin on the same host don't run the same stack.
 
 Signatures declare optional probe paths (`/wp-admin/`, `/.git/HEAD`). Those are
 requests to URLs nothing linked to, so they're off unless you ask for them.
+
+## Example run
+
+Against books.toscrape.com, capped at 150 pages, 3 requests/second:
+
+```
+$ recongraph crawl -u https://books.toscrape.com/ -d 2 --max-pages 150 --rate 3
+
+-- crawl summary --------------------------------------
+  target      https://books.toscrape.com/
+  status      budget-exceeded in 51.347s
+  graph       1158 nodes, 5666 edges
+  fetched     150 pages, 0 errors
+  statuses    150x200
+  3rd party   1 external hosts
+  findings    44 passive findings
+  tech        Bootstrap, Font Awesome, jQuery
+  TRUNCATED   1508 URLs dropped by --max-pages; the map is incomplete
+
+$ recongraph query latest --hubs 3
+    99  https://books.toscrape.com/catalogue/category/books_1/index.html
+    99  https://books.toscrape.com/index.html
+    66  https://books.toscrape.com/catalogue/category/books/philosophy_7/index.html
+
+$ recongraph query latest --external
+    99  ajax.googleapis.com
+```
+
+Two things in this run were wrong and are fixed: `--hubs` ranked the shared
+stylesheet and favicon above every page, and all 44 passive findings were
+contributor emails and GitHub links from comments in a bundled datepicker.
+Hubs now only rank pages, and in scripts and stylesheets the extractors skip
+comments.
 
 ## How it works
 
