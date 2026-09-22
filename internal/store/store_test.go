@@ -232,3 +232,54 @@ func TestSlugIsFilesystemSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestSameSecondSavesDoNotCollide(t *testing.T) {
+	st, err := OpenSnapshot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	when := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+
+	a, err := st.Save(ctx, sample(t, "https://example.com", when), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := st.Save(ctx, sample(t, "https://example.com", when.Add(300*time.Millisecond)), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a == b {
+		t.Fatalf("both saves got ID %s; the second overwrote the first", a)
+	}
+	metas, _ := st.List(ctx, "")
+	if len(metas) != 2 {
+		t.Fatalf("List = %d crawls, want 2", len(metas))
+	}
+	if metas[0].ID != b {
+		t.Errorf("newest first: got %s, want %s", metas[0].ID, b)
+	}
+}
+
+func TestLoadRestoresTimestamps(t *testing.T) {
+	st, err := OpenSnapshot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	when := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+
+	id, err := st.Save(ctx, sample(t, "https://example.com", when), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := st.Load(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !g.FinishedAt.Equal(when) || !g.StartedAt.Equal(when.Add(-time.Minute)) {
+		t.Errorf("timestamps lost on load: %v / %v", g.StartedAt, g.FinishedAt)
+	}
+}

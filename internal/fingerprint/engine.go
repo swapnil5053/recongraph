@@ -197,8 +197,13 @@ func (e *Engine) Match(in Input) []sitegraph.Tech {
 			if _, ok := found[imp]; ok {
 				continue
 			}
+			var cats []string
+			if isig := e.byName[strings.ToLower(imp)]; isig != nil {
+				cats = isig.Categories
+			}
 			found[imp] = &sitegraph.Tech{
 				Name:       imp,
+				Categories: cats,
 				Confidence: 50,
 				Evidence:   []string{"implied by " + name},
 			}

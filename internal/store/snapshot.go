@@ -82,7 +82,17 @@ func (s *Snapshot) Save(ctx context.Context, g *sitegraph.Graph, label string) (
 	if ts.IsZero() {
 		ts = time.Now().UTC()
 	}
-	id := ID(fmt.Sprintf("%s_%s", ts.UTC().Format("20060102T150405Z"), slug(g.Target)))
+	base := fmt.Sprintf("%s_%s", ts.UTC().Format("20060102T150405Z"), slug(g.Target))
+	id := ID(base)
+	// Two crawls of the same target can finish inside the same second (a
+	// script running them back to back, or the tests). Without this the
+	// second silently replaced the first.
+	for n := 2; ; n++ {
+		if _, err := os.Stat(s.path(id)); os.IsNotExist(err) {
+			break
+		}
+		id = ID(fmt.Sprintf("%s-%d", base, n))
+	}
 
 	meta := Meta{
 		ID:         id,

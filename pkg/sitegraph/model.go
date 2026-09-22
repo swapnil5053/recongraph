@@ -104,6 +104,10 @@ type Graph struct {
 	Status     string    `json:"status"` // complete | interrupted | budget-exceeded
 	Tool       string    `json:"tool"`
 
+	// Seeds are the URLs the crawl was started from. Pages pulled in from a
+	// sitemap also start at depth 0, so depth alone can't tell them apart.
+	Seeds []string `json:"seeds,omitempty"`
+
 	nodes    []*Node
 	index    map[string]NodeID
 	edges    []Edge
@@ -265,7 +269,7 @@ func (g *Graph) Orphans() []*Node {
 			continue
 		}
 		// Seeds have no inbound edges by construction.
-		if n.Depth == 0 {
+		if g.IsSeed(n) {
 			continue
 		}
 		anchored := false
@@ -281,6 +285,20 @@ func (g *Graph) Orphans() []*Node {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
 	return out
+}
+
+// IsSeed reports whether n is one of the crawl's starting URLs. Graphs saved
+// before Seeds was recorded fall back to depth 0.
+func (g *Graph) IsSeed(n *Node) bool {
+	if len(g.Seeds) == 0 {
+		return n.Depth == 0
+	}
+	for _, s := range g.Seeds {
+		if s == n.URL {
+			return true
+		}
+	}
+	return false
 }
 
 // Hubs returns internal nodes sorted by in-degree, highest first.

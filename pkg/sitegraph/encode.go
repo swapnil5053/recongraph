@@ -6,6 +6,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Snapshot is the serialisable form of a Graph. The in-memory Graph keeps
@@ -16,6 +17,7 @@ type Snapshot struct {
 	StartedAt  string    `json:"started_at"`
 	FinishedAt string    `json:"finished_at"`
 	Status     string    `json:"status"`
+	Seeds      []string  `json:"seeds,omitempty"`
 	Nodes      []*Node   `json:"nodes"`
 	Edges      []Edge    `json:"edges"`
 	Findings   []Finding `json:"findings,omitempty"`
@@ -31,6 +33,7 @@ func (g *Graph) ToSnapshot() *Snapshot {
 		StartedAt:  g.StartedAt.UTC().Format(timeLayout),
 		FinishedAt: g.FinishedAt.UTC().Format(timeLayout),
 		Status:     g.Status,
+		Seeds:      g.Seeds,
 		Nodes:      g.nodes,
 		Edges:      g.edges,
 		Findings:   g.findings,
@@ -43,6 +46,9 @@ func FromSnapshot(s *Snapshot) *Graph {
 	g := New(s.Target)
 	g.Tool = s.Tool
 	g.Status = s.Status
+	g.Seeds = s.Seeds
+	g.StartedAt, _ = time.Parse(timeLayout, s.StartedAt)
+	g.FinishedAt, _ = time.Parse(timeLayout, s.FinishedAt)
 	g.nodes = s.Nodes
 	for _, n := range s.Nodes {
 		g.index[n.URL] = n.ID

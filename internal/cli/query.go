@@ -12,10 +12,8 @@ import (
 	"github.com/swapnil5053/recongraph/pkg/sitegraph"
 )
 
-// The query subcommand exists because the whole premise of ReconGraph is that a
-// crawl leaves behind a queryable artifact. If the only way to interrogate the
-// graph were to open the file yourself, that premise would be unproven by the
-// tool that makes the claim.
+// query answers questions about a stored crawl without the user having to
+// unpack the snapshot and write jq.
 
 func runQuery(args []string) error {
 	fs := flag.NewFlagSet("query", flag.ContinueOnError)
@@ -158,7 +156,7 @@ func referenceKinds(g *sitegraph.Graph, id sitegraph.NodeID) string {
 		seen[e.Rel] = true
 	}
 	if len(seen) == 0 {
-		return "nothing (discovered from a seed or sitemap)"
+		return "nothing (listed in a sitemap)"
 	}
 	rels := make([]string, 0, len(seen))
 	for r := range seen {
@@ -290,7 +288,7 @@ func queryPathTo(g *sitegraph.Graph, target string) error {
 
 	var seeds []*sitegraph.Node
 	for _, n := range g.Nodes() {
-		if n.Depth == 0 && !n.External {
+		if !n.External && g.IsSeed(n) {
 			seeds = append(seeds, n)
 		}
 	}

@@ -145,6 +145,20 @@ func TestOrphansIgnoresAssetsAndSeeds(t *testing.T) {
 	}
 }
 
+// Pages from a sitemap enter the frontier at depth 0 like seeds do, but they
+// are exactly the unlinked pages the orphan query is for.
+func TestOrphansIncludesSitemapOnlyPages(t *testing.T) {
+	g := New("https://e.com")
+	g.Seeds = []string{"https://e.com/"}
+	g.EnsureNode("https://e.com/", KindPage, 0, false)
+	g.EnsureNode("https://e.com/landing", KindPage, 0, false)
+
+	orph := urlsOf(g.Orphans())
+	if len(orph) != 1 || orph[0] != "https://e.com/landing" {
+		t.Errorf("Orphans = %v, want only /landing", orph)
+	}
+}
+
 func TestShortestPath(t *testing.T) {
 	g := newTestGraph()
 	root, _ := g.Lookup("https://e.com/")

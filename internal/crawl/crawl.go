@@ -87,6 +87,7 @@ func Run(ctx context.Context, opts Options) (*sitegraph.Graph, Report, error) {
 		MaxQueue: opts.MaxQueue,
 	})
 
+	g.Seeds = append([]string(nil), opts.Seeds...)
 	seeds := opts.Seeds
 	if opts.UseSitemap {
 		seeds = append(seeds, discoverFromSitemaps(ctx, client, opts)...)
