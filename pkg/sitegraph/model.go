@@ -44,6 +44,7 @@ const (
 	RelComment    EdgeRel = "comment"
 	RelSitemap    EdgeRel = "sitemap"
 	RelRobots     EdgeRel = "robots"
+	RelLink       EdgeRel = "link" // <link rel=preload/search/...> that isn't a stylesheet or icon
 )
 
 // NodeID is graph-local. URLs are interned to ints to keep adjacency compact.
@@ -265,14 +266,25 @@ func (g *Graph) Orphans() []*Node {
 		if n.External || !navigable[n.Kind] {
 			continue
 		}
+		// A page the crawl never fetched (over budget, out of depth) may
+		// well be linked from pages it also never fetched. Only judge what
+		// was actually visited.
+		if !n.Fetched {
+			continue
+		}
 		// Seeds have no inbound edges by construction.
 		if g.IsSeed(n) {
 			continue
 		}
 		anchored := false
 		for _, e := range g.InEdges(n.ID) {
-			if e.Rel == RelHref {
+			// An href is the anchor we're looking for. Something pulled in by
+			// <link>, <img> or <script> is a resource, not a lost page.
+			switch e.Rel {
+			case RelHref, RelLink, RelStylesheet, RelScript, RelImage, RelMedia:
 				anchored = true
+			}
+			if anchored {
 				break
 			}
 		}

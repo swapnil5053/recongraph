@@ -33,6 +33,9 @@ func newTestGraph() *Graph {
 	g.AddEdge(a, js, RelScript, "")
 	g.AddEdge(root, px, RelImage, "")
 	g.AddEdge(b, api, RelJSEndpoint, "")
+	for _, id := range []NodeID{root, a, b, c, api} {
+		g.SetNodeResult(id, 200, "text/html", 100, "h", "", "")
+	}
 	return g
 }
 
@@ -150,12 +153,29 @@ func TestOrphansIgnoresAssetsAndSeeds(t *testing.T) {
 func TestOrphansIncludesSitemapOnlyPages(t *testing.T) {
 	g := New("https://e.com")
 	g.Seeds = []string{"https://e.com/"}
-	g.EnsureNode("https://e.com/", KindPage, 0, false)
-	g.EnsureNode("https://e.com/landing", KindPage, 0, false)
+	root, _ := g.EnsureNode("https://e.com/", KindPage, 0, false)
+	landing, _ := g.EnsureNode("https://e.com/landing", KindPage, 0, false)
+	g.SetNodeResult(root, 200, "text/html", 1, "a", "", "")
+	g.SetNodeResult(landing, 200, "text/html", 1, "b", "", "")
 
 	orph := urlsOf(g.Orphans())
 	if len(orph) != 1 || orph[0] != "https://e.com/landing" {
 		t.Errorf("Orphans = %v, want only /landing", orph)
+	}
+}
+
+// On a budget-truncated crawl most unfetched pages have no inbound anchor
+// simply because the pages linking to them weren't fetched either. A
+// 40-page crawl of pypi.org reported 300k "orphans" this way.
+func TestOrphansIgnoresUnfetchedPages(t *testing.T) {
+	g := New("https://e.com")
+	g.Seeds = []string{"https://e.com/"}
+	root, _ := g.EnsureNode("https://e.com/", KindPage, 0, false)
+	g.SetNodeResult(root, 200, "text/html", 1, "a", "", "")
+	g.EnsureNode("https://e.com/never-fetched", KindPage, 1, false)
+
+	if orph := g.Orphans(); len(orph) != 0 {
+		t.Errorf("Orphans = %v, want none", urlsOf(orph))
 	}
 }
 
@@ -312,4 +332,19 @@ func urlPath(g *Graph, ids []NodeID) []string {
 		out = append(out, g.Node(id).URL)
 	}
 	return out
+}
+
+// pypi.org links opensearch.xml with <link rel=search>; that's a resource,
+// not a page someone forgot to link.
+func TestOrphansIgnoreLinkedResources(t *testing.T) {
+	g := New("https://e.com")
+	g.Seeds = []string{"https://e.com/"}
+	root, _ := g.EnsureNode("https://e.com/", KindPage, 0, false)
+	osx, _ := g.EnsureNode("https://e.com/opensearch.xml", KindAPI, 1, false)
+	g.SetNodeResult(root, 200, "text/html", 1, "a", "", "")
+	g.SetNodeResult(osx, 200, "text/xml", 1, "b", "", "")
+	g.AddEdge(root, osx, RelLink, "search")
+	if orph := g.Orphans(); len(orph) != 0 {
+		t.Errorf("Orphans = %v, want none", urlsOf(orph))
+	}
 }

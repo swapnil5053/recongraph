@@ -134,8 +134,8 @@ func (p *Page) element(n *html.Node) {
 		case strings.Contains(rel, "manifest"):
 			p.add(href, sitegraph.RelHref, sitegraph.KindDocument, rel)
 		default:
-			// preload, prefetch, preconnect, dns-prefetch, ...
-			p.add(href, sitegraph.RelStylesheet, sitegraph.KindOther, rel)
+			// preload, prefetch, preconnect, search, ...
+			p.add(href, sitegraph.RelLink, sitegraph.KindOther, rel)
 		}
 
 	case "script":

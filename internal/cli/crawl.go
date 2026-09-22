@@ -234,6 +234,9 @@ func printSummary(w *os.File, g *sitegraph.Graph, r crawl.Report) {
 	fmt.Fprintf(w, "  status      %s in %s\n", r.Status, r.Duration.Round(time.Millisecond))
 	fmt.Fprintf(w, "  graph       %d nodes, %d edges\n", g.NumNodes(), g.NumEdges())
 	fmt.Fprintf(w, "  fetched     %d pages, %d errors\n", r.Builder.Pages, r.Builder.Errors)
+	if r.Builder.Blocked > 0 {
+		fmt.Fprintf(w, "  robots.txt  %d URLs skipped (disallowed)\n", r.Builder.Blocked)
+	}
 
 	if len(r.Builder.StatusHist) > 0 {
 		codes := make([]int, 0, len(r.Builder.StatusHist))
