@@ -75,6 +75,14 @@ var emailNoise = map[string]bool{
 // Extract runs every extractor over a body. isScript enables the JS-only ones.
 func Extract(body []byte, isScript bool) []Result {
 	s := string(body)
+	if isScript {
+		// Only look inside string literals. A real key or internal hostname
+		// in shipped code is in a string; comments in a script are almost
+		// always library credits (one datepicker bundle on a test crawl
+		// produced 31 contributor emails), and minified code like h.test(x)
+		// reads as a hostname.
+		s = jsscan.Literals(body)
+	}
 	seen := map[string]bool{}
 	var out []Result
 
@@ -180,6 +188,14 @@ func endpointEvidence(e jsscan.Endpoint) string {
 	}
 	return ev
 }
+
+// ExtractCSS runs the extractors over a stylesheet with its comments
+// removed, for the same reason scripts are limited to their literals.
+func ExtractCSS(body []byte) []Result {
+	return Extract(reCSSComment.ReplaceAll(body, nil), false)
+}
+
+var reCSSComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
 
 // ExtractFromComments runs the extractors over HTML comment text only.
 func ExtractFromComments(comments []string) []Result {

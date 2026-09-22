@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -174,6 +175,10 @@ func (w *worker) process(ctx context.Context, task frontier.Task) *builder.Resul
 		w.processScript(res, resp, base)
 	case parse.IsXML(resp.ContentType):
 		w.processXML(res, resp, base)
+	case strings.Contains(resp.ContentType, "css") || strings.HasSuffix(base.Path, ".css"):
+		if w.opts.Passive {
+			res.Findings = passive.ExtractCSS(resp.Body)
+		}
 	default:
 		if w.opts.Passive {
 			res.Findings = passive.Extract(resp.Body, false)

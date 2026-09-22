@@ -68,11 +68,44 @@ func TestExtractSecrets(t *testing.T) {
 		`const g = "` + j("AI", "za", "SyD-1234567890abcdefghijklmnopqrstu") + `";`,
 		`const t = "` + j("gh", "p_", "1234567890abcdefghijklmnopqrstuvwxyzAB") + `";`,
 		`const s = "` + j("xo", "xb-", "123456789012-abcdefghijklmnop") + `";`,
-		j("-----BEGIN RSA ", "PRIVATE KEY-----"),
+		`const k = "` + j("-----BEGIN RSA ", "PRIVATE KEY-----") + `";`,
 	}, "\n"))
 	got := values(Extract(body, true), KindSecret)
 	if len(got) < 5 {
 		t.Errorf("expected 5 secret-shaped strings, got %d: %v", len(got), got)
+	}
+}
+
+// Bundled libraries credit their authors in comments. On a crawl of
+// books.toscrape.com one datepicker file produced 31 emails and a dozen
+// GitHub profile links this way, and "h.test(" in minified code came out
+// as a hostname.
+func TestScriptCommentsAndCodeAreNotFindings(t *testing.T) {
+	js := []byte(`/*! datepicker | (c) Jane Doe <jane@example.org>, https://github.com/janedoe */
+		// Japanese translation by @suzuki https://github.com/suzuki
+		var h=/x/;if(h.test(v))n.push(1);
+		var support = "help@shop.example.com";`)
+	got := Extract(js, true)
+	if emails := values(got, KindEmail); len(emails) != 1 || emails[0] != "help@shop.example.com" {
+		t.Errorf("emails = %v, want only the one in a string literal", emails)
+	}
+	if s := values(got, KindSocial); len(s) != 0 {
+		t.Errorf("social links from comments: %v", s)
+	}
+	if h := values(got, KindInternal); len(h) != 0 {
+		t.Errorf("internal hosts from code: %v", h)
+	}
+}
+
+func TestExtractCSSSkipsComments(t *testing.T) {
+	css := []byte(`/* Font Awesome by Dave Gandy - http://twitter.com/davegandy */
+		.x{background:url(https://assets.s3.amazonaws.com/a.png)}`)
+	got := ExtractCSS(css)
+	if s := values(got, KindSocial); len(s) != 0 {
+		t.Errorf("social link from a comment: %v", s)
+	}
+	if b := values(got, KindBucket); len(b) != 1 {
+		t.Errorf("buckets = %v, want the one in the rule", b)
 	}
 }
 

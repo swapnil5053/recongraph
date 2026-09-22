@@ -365,3 +365,20 @@ func isIdentStart(c byte) bool {
 func isIdentPart(c byte) bool { return isIdentStart(c) || isDigit(c) }
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// Literals returns the contents of every string and template literal in src,
+// one per line. Running text extractors over this instead of the raw file
+// skips comments, which in bundled libraries are mostly author credits and
+// licence links.
+func Literals(src []byte) string {
+	var b strings.Builder
+	for _, toks := range Lex(string(src)) {
+		for _, t := range toks {
+			if t.Kind == String || t.Kind == Template {
+				b.WriteString(t.Value)
+				b.WriteByte('\n')
+			}
+		}
+	}
+	return b.String()
+}
