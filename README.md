@@ -47,7 +47,7 @@ The stages form a cycle of bounded channels, which deadlocks if the frontier eve
 ## Engineering
 
 - One third-party dependency (`golang.org/x/net/html`), no cgo, static binaries for five platforms built by a release workflow.
-- 126 tests and a fuzz target, run under the race detector in CI. The heaviest coverage is on URL canonicalisation, because diff accuracy depends on it.
+- 128 tests and a fuzz target, run under the race detector in CI. The heaviest coverage is on URL canonicalisation, because diff accuracy depends on it.
 - An end-to-end test crawls a test site, changes it, crawls again, and checks the list, query, diff and export output.
 - Crawling two real sites (books.toscrape.com and pypi.org) turned up bugs the unit tests missed, each now covered by a regression test: shared assets outranking pages as hubs, library comments reported as findings, a 300,000-URL sitemap swallowing a 40-page crawl, and `.dev` domains flagged as internal hosts.
 - Design decisions, including reversed ones, are written up as [ADRs](docs/adr/).

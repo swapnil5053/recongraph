@@ -325,9 +325,12 @@ https://example.com/  [200 OK]
   WordPress 6.4.2        100%  cms
 <span class="d">      meta generator: WordPress 6.4.2</span>
 <span class="d">      script /wp-includes/js/jquery/jquery.min.js</span>
+<span class="d">      body: /wp-includes/</span>
   Nginx 1.24.0            90%  web-server
 <span class="d">      header server: nginx/1.24.0</span>
-  PHP                     50%
+  jQuery                  75%  javascript-library
+<span class="d">      script /wp-includes/js/jquery/jquery.min.js</span>
+  PHP                     50%  language
 <span class="d">      implied by WordPress</span></pre>
       </article>
     </div>
@@ -361,17 +364,17 @@ https://example.com/  [200 OK]
 </span><span class="blk" data-k="changed">
 <span class="h">CHANGED (2)</span>
 <span class="t">  ~ https://example.com/</span>
-<span class="d">      content      50e73c1c730e4f22 → 99b16757bec9ddb1</span>
-<span class="d">      tech         Nginx 1.24.0, PHP, WordPress 6.4.2, jQuery</span>
-<span class="d">                →  Nginx 1.24.0, PHP, WordPress 6.5.1, jQuery</span>
+<span class="d">      content      4b5371a08f397ea3 -&gt; 1b6fcdd71ee0ef25</span>
+<span class="d">      tech         Nginx 1.24.0, PHP, WordPress 6.4.2, jQuery -&gt; Nginx 1.24.0, PHP, WordPress 6.5.1, jQuery</span>
 <span class="t">  ~ https://example.com/about.html</span>
-<span class="d">      content      2bfc760aab380804 → e669777320a0ed90</span>
+<span class="d">      content      6002b2a61fb20a07 -&gt; cfcfe24c0f875871</span>
 </span><span class="blk" data-k="restructured">
 <span class="h">RESTRUCTURED (same page, different references) (2)</span>
   * https://example.com/
 <span class="p">      + now links to https://example.com/pricing.html [href]</span>
 <span class="p">      + now links to https://newtracker.example.io/px [href]</span>
 <span class="m">      - no longer links to https://partner.example.net/deal [href]</span>
+<span class="m">      - no longer links to https://example.com/team.html [href]</span>
   * https://example.com/about.html
 <span class="m">      - no longer links to https://example.com/team.html [href]</span>
 </span><span class="blk" data-k="hosts">
