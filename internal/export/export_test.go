@@ -161,7 +161,7 @@ func TestWriteHTMLIsSelfContained(t *testing.T) {
 		}
 	}
 
-	m := regexp.MustCompile(`(?s)const D = (\{.*?\});\nconst COLORS`).FindStringSubmatch(out)
+	m := regexp.MustCompile(`(?s)const D = (\{.*?\});\n\n// Kinds are grouped`).FindStringSubmatch(out)
 	if m == nil {
 		t.Fatal("embedded payload not found")
 	}
