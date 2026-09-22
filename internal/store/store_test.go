@@ -283,3 +283,23 @@ func TestLoadRestoresTimestamps(t *testing.T) {
 		t.Errorf("timestamps lost on load: %v / %v", g.StartedAt, g.FinishedAt)
 	}
 }
+
+// Read-only commands open the store too; a mistyped --store must not create
+// directories.
+func TestOpenDoesNotCreateDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "typo", "crawls")
+	st, err := OpenSnapshot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metas, err := st.List(context.Background(), "")
+	if err != nil || len(metas) != 0 {
+		t.Fatalf("List on a missing dir = %v, %v", metas, err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("OpenSnapshot/List created %s", dir)
+	}
+	if _, err := st.Save(context.Background(), sample(t, "https://example.com", time.Now()), ""); err != nil {
+		t.Fatalf("Save should create the directory: %v", err)
+	}
+}

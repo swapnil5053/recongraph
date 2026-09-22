@@ -44,9 +44,8 @@ func OpenSnapshot(dir string) (*Snapshot, error) {
 	if dir == "" {
 		dir = DefaultDir()
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("creating store dir: %w", err)
-	}
+	// The directory is created on first Save, not here, so a mistyped
+	// --store on a read-only command doesn't leave empty folders behind.
 	return &Snapshot{dir: dir}, nil
 }
 
@@ -106,6 +105,9 @@ func (s *Snapshot) Save(ctx context.Context, g *sitegraph.Graph, label string) (
 		Findings:   len(g.Findings()),
 	}
 
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating store dir: %w", err)
+	}
 	// Temp file then rename, so an interrupted save can't leave a half-written
 	// crawl that fails to load later.
 	tmp, err := os.CreateTemp(s.dir, ".tmp-*")
@@ -137,6 +139,9 @@ func (s *Snapshot) Save(ctx context.Context, g *sitegraph.Graph, label string) (
 // List returns stored crawls, newest first.
 func (s *Snapshot) List(ctx context.Context, target string) ([]Meta, error) {
 	entries, err := os.ReadDir(s.dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
