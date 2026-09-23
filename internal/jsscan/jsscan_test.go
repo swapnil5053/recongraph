@@ -168,3 +168,52 @@ func FuzzEndpoints(f *testing.F) {
 		_ = Endpoints([]byte(s)) // must not panic or hang
 	})
 }
+
+func TestEndpointsResolveStringConstants(t *testing.T) {
+	js := `
+const base = "/api/v2";
+var CDN = "https://cdn.example.net";
+let mode = "dark";
+fetch(base + "/users");
+axios.get(base + "/orders/" + id);
+$.get(CDN + "/lib.js");
+fetch(mode);
+`
+	eps := Endpoints([]byte(js))
+	for v, dyn := range map[string]bool{
+		"/api/v2/users":                  false,
+		"/api/v2/orders/{}":              true,
+		"https://cdn.example.net/lib.js": false,
+	} {
+		e, ok := find(eps, v)
+		if !ok {
+			t.Errorf("missing %s in %+v", v, eps)
+			continue
+		}
+		if e.Dynamic != dyn {
+			t.Errorf("%s: dynamic = %v, want %v", v, e.Dynamic, dyn)
+		}
+	}
+	if _, ok := find(eps, "dark"); ok {
+		t.Error("a constant that isn't a URL should not become an endpoint")
+	}
+}
+
+// A name assigned two different strings can't be folded into one value.
+func TestReassignedConstantIsNotFolded(t *testing.T) {
+	js := `let base = "/api/v1"; if (beta) { base = "/api/v2"; } fetch(base + "/users");`
+	eps := Endpoints([]byte(js))
+	for _, bad := range []string{"/api/v1/users", "/api/v2/users"} {
+		if _, ok := find(eps, bad); ok {
+			t.Errorf("guessed %s from a reassigned variable", bad)
+		}
+	}
+}
+
+// == and += are not assignments of a URL.
+func TestComparisonsAreNotConstants(t *testing.T) {
+	js := `if (path == "/api/admin") {} let p = q; p += "/x"; fetch(path + "/users");`
+	if _, ok := find(Endpoints([]byte(js)), "/api/admin/users"); ok {
+		t.Error("a comparison was treated as an assignment")
+	}
+}

@@ -76,8 +76,10 @@ func Endpoints(src []byte) []Endpoint {
 		best[e.Value] = e
 	}
 
-	for _, toks := range Lex(string(src)) {
-		scanStream(toks, add)
+	streams := Lex(string(src))
+	consts := stringConsts(streams)
+	for _, toks := range streams {
+		scanStream(toks, consts, add)
 	}
 
 	out := make([]Endpoint, 0, len(best))
@@ -88,25 +90,25 @@ func Endpoints(src []byte) []Endpoint {
 	return out
 }
 
-func scanStream(toks []Token, add func(Endpoint)) {
+func scanStream(toks []Token, consts map[string]string, add func(Endpoint)) {
 	for i, t := range toks {
 		switch {
 		case t.Kind == Punct && t.Value == "(":
 			if callee, argIdx, ok := callTarget(toks, i); ok {
-				if v, dyn, ok := argValue(toks, i, argIdx); ok {
+				if v, dyn, ok := argValue(toks, consts, i, argIdx); ok {
 					add(Endpoint{Value: v, Source: SourceCall, Callee: callee, Dynamic: dyn})
 				}
 			}
 
 		case (t.Kind == Ident || t.Kind == String) && urlKeys[t.Value]:
 			if i+2 < len(toks) && toks[i+1].Kind == Punct && (toks[i+1].Value == ":" || toks[i+1].Value == "=") {
-				if v, dyn, ok := valueAt(toks, i+2); ok && (strings.HasPrefix(v, "/") || reAbsURL.MatchString(v)) {
+				if v, dyn, ok := exprAt(toks, consts, i+2); ok && (strings.HasPrefix(v, "/") || reAbsURL.MatchString(v)) {
 					add(Endpoint{Value: v, Source: SourceProperty, Dynamic: dyn})
 				}
 			}
 
 		case t.Kind == String || t.Kind == Template:
-			v, dyn, ok := valueAt(toks, i)
+			v, dyn, ok := exprAt(toks, consts, i)
 			if !ok {
 				continue
 			}
@@ -146,7 +148,7 @@ func callTarget(toks []Token, paren int) (callee string, argIdx int, ok bool) {
 	case name == "open" && receiver != "":
 		// xhr.open("GET", url). Only if the first argument is an HTTP method,
 		// otherwise window.open(url) and friends would match as well.
-		if v, _, ok := argValue(toks, paren, 0); ok && isMethod(v) {
+		if v, _, ok := argValue(toks, nil, paren, 0); ok && isMethod(v) {
 			return "open", 1, true
 		}
 		if receiver == "window" {
@@ -168,13 +170,13 @@ func isMethod(s string) bool {
 
 // argValue returns the value of the argIdx'th argument of the call whose
 // opening parenthesis is at toks[paren].
-func argValue(toks []Token, paren, argIdx int) (string, bool, bool) {
+func argValue(toks []Token, consts map[string]string, paren, argIdx int) (string, bool, bool) {
 	depth, arg := 0, 0
 	first := true
 	for k := paren + 1; k < len(toks); k++ {
 		t := toks[k]
 		if depth == 0 && first && arg == argIdx {
-			return valueAt(toks, k)
+			return exprAt(toks, consts, k)
 		}
 		first = false
 		if t.Kind != Punct {
@@ -201,24 +203,85 @@ func argValue(toks []Token, paren, argIdx int) (string, bool, bool) {
 	return "", false, false
 }
 
-// valueAt reads a string or template at toks[k], noting whether it's
-// concatenated with something ("/api/" + id) and so only partly known.
-func valueAt(toks []Token, k int) (string, bool, bool) {
-	t := toks[k]
-	if t.Kind != String && t.Kind != Template {
+// stringConsts collects `name = "literal"` bindings so an endpoint split
+// across a variable can still be resolved: const base = "/api" makes
+// fetch(base + "/users") readable as /api/users. A name assigned two
+// different literals is dropped rather than guessed at. This is one level of
+// constant folding, not data flow: nothing tracks reassignment order, scope
+// or objects.
+func stringConsts(streams [][]Token) map[string]string {
+	vals := map[string]string{}
+	ambiguous := map[string]bool{}
+	for _, toks := range streams {
+		for i := 1; i < len(toks)-1; i++ {
+			t := toks[i]
+			if t.Kind != Punct || t.Value != "=" || toks[i-1].Kind != Ident {
+				continue
+			}
+			// Skip ==, !=, >=, +=: those are comparisons and updates, and
+			// the lexer emits their characters separately.
+			if toks[i+1].Kind == Punct && toks[i+1].Value == "=" {
+				continue
+			}
+			name := toks[i-1].Value
+			v, static := staticValue(toks[i+1])
+			if !static {
+				ambiguous[name] = true
+				continue
+			}
+			if old, seen := vals[name]; seen && old != v {
+				ambiguous[name] = true
+			}
+			vals[name] = v
+		}
+	}
+	for name := range ambiguous {
+		delete(vals, name)
+	}
+	return vals
+}
+
+// staticValue reads a token that is known at parse time.
+func staticValue(t Token) (string, bool) {
+	if t.Kind == String || (t.Kind == Template && !t.Dynamic) {
+		return t.Value, true
+	}
+	return "", false
+}
+
+// exprAt reads a "a" + b + "c" expression starting at toks[k] and returns the
+// text it produces, with "{}" where a part isn't known. It only reads from the
+// start of an expression, so the same concatenation isn't reported twice.
+func exprAt(toks []Token, consts map[string]string, k int) (string, bool, bool) {
+	if k > 0 && toks[k-1].Kind == Punct && toks[k-1].Value == "+" {
 		return "", false, false
 	}
-	v := t.Value
-	dyn := t.Kind == Template && t.Dynamic
-	if k+1 < len(toks) && toks[k+1].Kind == Punct && toks[k+1].Value == "+" {
-		dyn = true
-		v += "{}"
+	var b strings.Builder
+	dynamic := false
+	for terms := 0; terms < 8; terms++ {
+		if k >= len(toks) {
+			break
+		}
+		t := toks[k]
+		switch {
+		case t.Kind == String, t.Kind == Template:
+			b.WriteString(t.Value)
+			dynamic = dynamic || t.Dynamic
+		case t.Kind == Ident && consts[t.Value] != "":
+			b.WriteString(consts[t.Value])
+		case terms == 0:
+			return "", false, false // not a string expression at all
+		default:
+			b.WriteString("{}")
+			dynamic = true
+		}
+		if k+2 < len(toks) && toks[k+1].Kind == Punct && toks[k+1].Value == "+" {
+			k += 2
+			continue
+		}
+		break
 	}
-	if k > 0 && toks[k-1].Kind == Punct && toks[k-1].Value == "+" {
-		dyn = true
-		v = "{}" + v
-	}
-	return v, dyn, true
+	return b.String(), dynamic, true
 }
 
 // plausible rejects strings that can't be a URL or path: prose, markup, CSS
