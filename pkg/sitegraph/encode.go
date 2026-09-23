@@ -50,6 +50,9 @@ func FromSnapshot(s *Snapshot) *Graph {
 	g.StartedAt, _ = time.Parse(timeLayout, s.StartedAt)
 	g.FinishedAt, _ = time.Parse(timeLayout, s.FinishedAt)
 	g.nodes = s.Nodes
+	// Adjacency is indexed by node ID, so it has to exist before AddEdge.
+	g.out = make([][]int32, len(s.Nodes))
+	g.in = make([][]int32, len(s.Nodes))
 	for _, n := range s.Nodes {
 		g.index[n.URL] = n.ID
 	}

@@ -109,30 +109,29 @@ type Graph struct {
 	// sitemap also start at depth 0, so depth alone can't tell them apart.
 	Seeds []string `json:"seeds,omitempty"`
 
-	nodes    []*Node
-	index    map[string]NodeID
-	edges    []Edge
-	edgeSeen map[edgeKey]struct{}
-	out      map[NodeID][]int // node -> indices into edges
-	in       map[NodeID][]int
+	nodes []*Node
+	// Nodes are handed out from blocks rather than allocated one at a time;
+	// a crawl makes tens of thousands of them and they all live as long as
+	// the graph does.
+	block []Node
+	index map[string]NodeID
+	edges []Edge
+
+	// Adjacency is indexed by NodeID, which is dense, so these are slices
+	// rather than maps: on a 20k-page graph that alone was a third of the
+	// memory and most of the allocations.
+	out [][]int32 // node -> indices into edges
+	in  [][]int32
 
 	findings []Finding
-}
-
-type edgeKey struct {
-	src, dst NodeID
-	rel      EdgeRel
 }
 
 // New returns an empty graph for target.
 func New(target string) *Graph {
 	return &Graph{
-		Target:   target,
-		Status:   "complete",
-		index:    make(map[string]NodeID),
-		edgeSeen: make(map[edgeKey]struct{}),
-		out:      make(map[NodeID][]int),
-		in:       make(map[NodeID][]int),
+		Target: target,
+		Status: "complete",
+		index:  make(map[string]NodeID),
 	}
 }
 
@@ -152,7 +151,10 @@ func (g *Graph) EnsureNode(canonURL string, kind NodeKind, depth int, external b
 	}
 	id := NodeID(len(g.nodes))
 	scheme, host, path := splitURL(canonURL)
-	g.nodes = append(g.nodes, &Node{
+	g.out = append(g.out, nil)
+	g.in = append(g.in, nil)
+	n := g.newNode()
+	*n = Node{
 		ID:        id,
 		URL:       canonURL,
 		Kind:      kind,
@@ -162,20 +164,36 @@ func (g *Graph) EnsureNode(canonURL string, kind NodeKind, depth int, external b
 		Depth:     depth,
 		External:  external,
 		FirstSeen: time.Now().UTC(),
-	})
+	}
+	g.nodes = append(g.nodes, n)
 	g.index[canonURL] = id
 	return id, true
+}
+
+// newNode returns storage for one node, in blocks of 512.
+func (g *Graph) newNode() *Node {
+	if len(g.block) == cap(g.block) {
+		g.block = make([]Node, 0, 512)
+	}
+	g.block = g.block[:len(g.block)+1]
+	return &g.block[len(g.block)-1]
 }
 
 // AddEdge records a directed reference. Duplicate (src,dst,rel) triples
 // collapse, so a nav link on 500 pages is one edge per source, not 500.
 func (g *Graph) AddEdge(src, dst NodeID, rel EdgeRel, context string) bool {
-	k := edgeKey{src, dst, rel}
-	if _, ok := g.edgeSeen[k]; ok {
+	if int(src) >= len(g.out) || int(dst) >= len(g.in) {
 		return false
 	}
-	g.edgeSeen[k] = struct{}{}
-	idx := len(g.edges)
+	// Scanning the source's own edges is cheaper than keeping a set of every
+	// (src,dst,rel) triple in the graph: out-degree is bounded by how many
+	// references one page has, while the set grew with the whole crawl.
+	for _, i := range g.out[src] {
+		if e := g.edges[i]; e.Dst == dst && e.Rel == rel {
+			return false
+		}
+	}
+	idx := int32(len(g.edges))
 	g.edges = append(g.edges, Edge{Src: src, Dst: dst, Rel: rel, Context: context})
 	g.out[src] = append(g.out[src], idx)
 	g.in[dst] = append(g.in[dst], idx)
@@ -207,11 +225,25 @@ func (g *Graph) NumEdges() int       { return len(g.edges) }
 
 // InDegree is the cheapest importance signal available: nav and hub pages
 // score high, forgotten corners score one.
-func (g *Graph) InDegree(id NodeID) int  { return len(g.in[id]) }
-func (g *Graph) OutDegree(id NodeID) int { return len(g.out[id]) }
+func (g *Graph) InDegree(id NodeID) int {
+	if int(id) >= len(g.in) {
+		return 0
+	}
+	return len(g.in[id])
+}
+
+func (g *Graph) OutDegree(id NodeID) int {
+	if int(id) >= len(g.out) {
+		return 0
+	}
+	return len(g.out[id])
+}
 
 // OutEdges returns the edges leaving a node.
 func (g *Graph) OutEdges(id NodeID) []Edge {
+	if int(id) >= len(g.out) {
+		return nil
+	}
 	idxs := g.out[id]
 	es := make([]Edge, 0, len(idxs))
 	for _, i := range idxs {
@@ -222,6 +254,9 @@ func (g *Graph) OutEdges(id NodeID) []Edge {
 
 // InEdges returns the edges arriving at a node.
 func (g *Graph) InEdges(id NodeID) []Edge {
+	if int(id) >= len(g.in) {
+		return nil
+	}
 	idxs := g.in[id]
 	es := make([]Edge, 0, len(idxs))
 	for _, i := range idxs {

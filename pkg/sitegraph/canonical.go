@@ -164,12 +164,25 @@ func Resolve(base *url.URL, ref string, opts CanonOpts) (string, error) {
 }
 
 // splitURL pulls scheme, host and path out of an already-canonical URL.
+// splitURL pulls the three parts out of an already-canonical URL by slicing
+// it. url.Parse would allocate a URL and three strings per node; these are
+// substrings of one that already exists.
 func splitURL(canon string) (scheme, host, p string) {
-	u, err := url.Parse(canon)
-	if err != nil {
+	i := strings.Index(canon, "://")
+	if i < 0 {
 		return "", "", ""
 	}
-	return u.Scheme, u.Host, u.Path
+	scheme, rest := canon[:i], canon[i+3:]
+	end := strings.IndexAny(rest, "/?#")
+	if end < 0 {
+		return scheme, rest, ""
+	}
+	host = rest[:end]
+	p = rest[end:]
+	if q := strings.IndexAny(p, "?#"); q >= 0 {
+		p = p[:q]
+	}
+	return scheme, host, p
 }
 
 // RegistrableSuffixDepth is how many labels count as the registrable domain.
