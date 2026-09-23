@@ -23,6 +23,10 @@ func runDiff(args []string) error {
 
   recongraph diff latest~1 latest
   recongraph diff 20260901T101500Z_example.com latest
+  recongraph diff latest~1 latest --fail-on new-external-host,new-secret
+
+Exit codes: 0 no rule tripped, 1 the diff could not run, 2 a --fail-on rule
+tripped.
 
 `)
 		fs.PrintDefaults()
@@ -32,6 +36,7 @@ func runDiff(args []string) error {
 	ignoreContent := fs.Bool("ignore-content", false, "Do not report pages whose body bytes changed.")
 	ignoreFindings := fs.Bool("ignore-findings", false, "Do not compare passive findings.")
 	explain := fs.Bool("explain", false, "Show the canonical URLs being compared, for debugging noisy diffs.")
+	failOn := fs.String("fail-on", "", "Exit 2 if any of these changed (comma separated): "+strings.Join(ruleNames(), ", ")+".")
 
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -75,14 +80,112 @@ func runDiff(args []string) error {
 		IgnoreFindings:    *ignoreFindings,
 	})
 
+	rules, err := parseRules(*failOn)
+	if err != nil {
+		return err
+	}
+
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		if err := enc.Encode(res); err != nil {
+			return err
+		}
+	} else {
+		printDiff(res, string(oldID), string(newID), *explain)
 	}
+	return checkRules(res, rules)
+}
 
-	printDiff(res, string(oldID), string(newID), *explain)
-	return nil
+// Rules for `--fail-on`. The point is a scheduled CI job: crawl the site,
+// diff against yesterday, and fail the build when something moved that
+// nobody meant to move. A new third-party host on your pages is the one
+// worth waking up for.
+var failRules = []struct {
+	name  string
+	what  string
+	count func(*diff.Result) int
+}{
+	{"new-external-host", "third-party hosts appeared", func(r *diff.Result) int { return len(r.AppearedHosts) }},
+	{"new-secret", "secret-shaped strings appeared", func(r *diff.Result) int { return countFindings(r, "secret") }},
+	{"new-finding", "passive findings appeared", func(r *diff.Result) int { return len(r.AppearedFindings) }},
+	{"appeared", "pages appeared", func(r *diff.Result) int { return len(r.AppearedNodes) }},
+	{"disappeared", "pages disappeared", func(r *diff.Result) int { return len(r.DisappearedNodes) }},
+	{"changed", "pages changed", func(r *diff.Result) int { return len(r.ChangedNodes) }},
+	{"restructured", "pages changed what they reference", func(r *diff.Result) int {
+		n := 0
+		for _, rs := range r.Restructured {
+			if len(rs.AddedOut)+len(rs.RemovedOut) > 0 {
+				n++
+			}
+		}
+		return n
+	}},
+	{"any", "anything changed", func(r *diff.Result) int {
+		if r.Empty() {
+			return 0
+		}
+		return 1
+	}},
+}
+
+func ruleNames() []string {
+	out := make([]string, 0, len(failRules))
+	for _, r := range failRules {
+		out = append(out, r.name)
+	}
+	return out
+}
+
+func countFindings(r *diff.Result, kind string) int {
+	n := 0
+	for _, f := range r.AppearedFindings {
+		if strings.Contains(f.Kind, kind) {
+			n++
+		}
+	}
+	return n
+}
+
+func parseRules(list string) ([]int, error) {
+	if strings.TrimSpace(list) == "" {
+		return nil, nil
+	}
+	var out []int
+	for _, raw := range strings.Split(list, ",") {
+		name := strings.ToLower(strings.TrimSpace(raw))
+		if name == "" {
+			continue
+		}
+		found := -1
+		for i, r := range failRules {
+			if r.name == name {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			return nil, fmt.Errorf("unknown --fail-on rule %q; valid rules are %s", name, strings.Join(ruleNames(), ", "))
+		}
+		out = append(out, found)
+	}
+	return out, nil
+}
+
+// checkRules reports tripped rules on stderr and returns exit code 2, so the
+// diff itself still goes to stdout for the build log.
+func checkRules(res *diff.Result, rules []int) error {
+	var tripped []string
+	for _, i := range rules {
+		r := failRules[i]
+		if n := r.count(res); n > 0 {
+			tripped = append(tripped, fmt.Sprintf("%s (%d %s)", r.name, n, r.what))
+		}
+	}
+	if len(tripped) == 0 {
+		return nil
+	}
+	return &ExitError{Code: 2, Err: fmt.Errorf("failing on %s", strings.Join(tripped, "; "))}
 }
 
 // resolveRef adds "latest~N" on top of the store's own reference resolution.

@@ -22,6 +22,7 @@ func runList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	storeDir := fs.String("store", "", "Crawl store directory.")
 	target := fs.String("target", "", "Only crawls whose target contains this string.")
+	count := fs.Bool("count", false, "Print how many crawls are stored and nothing else.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -35,6 +36,11 @@ func runList(args []string) error {
 	metas, err := st.List(context.Background(), *target)
 	if err != nil {
 		return err
+	}
+	if *count {
+		// For scripts deciding whether there is anything to diff against.
+		fmt.Println(len(metas))
+		return nil
 	}
 	if len(metas) == 0 {
 		fmt.Printf("No stored crawls in %s.\n", st.Dir())

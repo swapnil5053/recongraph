@@ -7,6 +7,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ import (
 // Version is overridden at build time:
 //
 //	go build -ldflags "-X github.com/swapnil5053/recongraph/internal/cli.Version=v0.2.0"
-var Version = "0.1.2"
+var Version = "0.2.0"
 
 type command struct {
 	name    string
@@ -56,6 +57,10 @@ func Main(args []string) int {
 		if c.name == name {
 			if err := c.run(args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "recongraph %s: %v\n", name, err)
+				var ex *ExitError
+				if errors.As(err, &ex) {
+					return ex.Code
+				}
 				return 1
 			}
 			return 0
@@ -66,6 +71,17 @@ func Main(args []string) int {
 	usage(os.Stderr)
 	return 2
 }
+
+// ExitError carries a specific exit code, so `diff --fail-on` can be told
+// apart from a diff that could not run at all. 1 is an error, 2 is "the
+// check tripped", which is what a CI step wants.
+type ExitError struct {
+	Code int
+	Err  error
+}
+
+func (e *ExitError) Error() string { return e.Err.Error() }
+func (e *ExitError) Unwrap() error { return e.Err }
 
 func usage(w io.Writer) {
 	fmt.Fprintf(w, `ReconGraph %s - web reconnaissance and asset mapping

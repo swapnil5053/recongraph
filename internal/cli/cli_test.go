@@ -249,3 +249,63 @@ func TestCrawlOfDeadHostFails(t *testing.T) {
 		t.Errorf("a failed crawl was saved:\n%s", out)
 	}
 }
+
+func TestDiffFailOn(t *testing.T) {
+	srv, v2 := twoVersionSite(t)
+	store := t.TempDir()
+	args := []string{"crawl", "-u", srv.URL + "/", "--store", store, "--rate", "1000", "--burst", "64", "-q"}
+	if _, errOut, code := capture(t, args...); code != 0 {
+		t.Fatalf("crawl: %d %s", code, errOut)
+	}
+	v2.Store(true)
+	if _, errOut, code := capture(t, args...); code != 0 {
+		t.Fatalf("crawl: %d %s", code, errOut)
+	}
+
+	t.Run("tripped rule exits 2", func(t *testing.T) {
+		out, errOut, code := capture(t, "diff", "latest~1", "latest", "--store", store, "--fail-on", "appeared")
+		if code != 2 {
+			t.Errorf("exit = %d, want 2", code)
+		}
+		if !strings.Contains(errOut, "failing on appeared") {
+			t.Errorf("stderr = %q", errOut)
+		}
+		if !strings.Contains(out, "APPEARED") {
+			t.Error("the diff itself should still go to stdout")
+		}
+	})
+
+	t.Run("untripped rule exits 0", func(t *testing.T) {
+		_, errOut, code := capture(t, "diff", "latest~1", "latest", "--store", store, "--fail-on", "new-external-host,new-secret")
+		if code != 0 {
+			t.Errorf("exit = %d (%s), want 0; this site has no third-party hosts", code, errOut)
+		}
+	})
+
+	t.Run("json output still fails", func(t *testing.T) {
+		out, _, code := capture(t, "diff", "latest~1", "latest", "--store", store, "--json", "--fail-on", "any")
+		if code != 2 || !strings.Contains(out, "appeared_nodes") {
+			t.Errorf("exit = %d, output starts %.40q", code, out)
+		}
+	})
+
+	t.Run("unknown rule is an error, not a pass", func(t *testing.T) {
+		_, errOut, code := capture(t, "diff", "latest~1", "latest", "--store", store, "--fail-on", "nonsense")
+		if code != 1 || !strings.Contains(errOut, "unknown --fail-on rule") {
+			t.Errorf("exit = %d, stderr = %q", code, errOut)
+		}
+	})
+}
+
+func TestListCount(t *testing.T) {
+	store := t.TempDir()
+	out, _, code := capture(t, "list", "--count", "--store", store)
+	if code != 0 || strings.TrimSpace(out) != "0" {
+		t.Fatalf("empty store: exit %d, out %q", code, out)
+	}
+	srv, _ := twoVersionSite(t)
+	capture(t, "crawl", "-u", srv.URL+"/", "--store", store, "--rate", "1000", "--burst", "64", "-q")
+	if out, _, _ := capture(t, "list", "--count", "--store", store); strings.TrimSpace(out) != "1" {
+		t.Errorf("after one crawl: %q", out)
+	}
+}

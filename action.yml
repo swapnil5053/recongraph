@@ -1,0 +1,81 @@
+name: ReconGraph watch
+description: Crawl a site, compare it with the last crawl, and fail the job when something moved.
+author: Swapnil Kumar
+
+inputs:
+  url:
+    description: URL to crawl.
+    required: true
+  fail-on:
+    description: Comma-separated rules that fail the job. See `recongraph diff -h`.
+    required: false
+    default: new-external-host,new-secret
+  max-pages:
+    description: Page budget for the crawl.
+    required: false
+    default: "500"
+  rate:
+    description: Requests per second, per host.
+    required: false
+    default: "2"
+  args:
+    description: Extra flags passed to `recongraph crawl`, e.g. "--subs -d 4".
+    required: false
+    default: ""
+  version:
+    description: Release to use, e.g. v0.2.0.
+    required: false
+    default: v0.2.0
+
+runs:
+  using: composite
+  steps:
+    - name: Install ReconGraph
+      shell: bash
+      run: |
+        set -euo pipefail
+        ver='${{ inputs.version }}'
+        url="https://github.com/swapnil5053/recongraph/releases/download/$ver/recongraph-$ver-linux-amd64.tar.gz"
+        curl -fsSL "$url" -o /tmp/recongraph.tar.gz
+        tar -xzf /tmp/recongraph.tar.gz -C /tmp
+        install "/tmp/recongraph-$ver-linux-amd64/recongraph" /usr/local/bin/recongraph
+        recongraph version
+
+    # Crawls are the state this action compares against, so they are cached
+    # between runs. restore-keys picks up the newest previous cache, because
+    # the key itself always misses (it has the run number in it).
+    - name: Restore previous crawls
+      uses: actions/cache@v4
+      with:
+        path: ~/.recongraph
+        key: recongraph-${{ inputs.url }}-${{ github.run_id }}
+        restore-keys: recongraph-${{ inputs.url }}-
+
+    - name: Crawl
+      shell: bash
+      run: |
+        set -euo pipefail
+        recongraph crawl -u '${{ inputs.url }}' \
+          --max-pages '${{ inputs.max-pages }}' --rate '${{ inputs.rate }}' \
+          ${{ inputs.args }} -o urls.txt
+
+    - name: Diff against the last crawl
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "$(recongraph list --count)" -lt 2 ]; then
+          echo "First run for this target: nothing to compare against yet."
+          exit 0
+        fi
+        recongraph diff latest~1 latest --fail-on '${{ inputs.fail-on }}'
+
+    - name: Save the map
+      if: always()
+      shell: bash
+      run: recongraph export latest -f html -o recongraph-map.html
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: recongraph-map
+        path: recongraph-map.html
