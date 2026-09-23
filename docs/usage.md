@@ -68,7 +68,17 @@ unique prefix of one.
 recongraph list
 recongraph diff latest~1 latest
 recongraph diff latest~1 latest --json --ignore-content
+
+# exit 2 if either rule trips, for use as a CI check
+recongraph diff latest~1 latest --fail-on new-external-host,new-secret
 ```
+
+Rules for `--fail-on`: `new-external-host`, `new-secret`, `new-finding`,
+`appeared`, `disappeared`, `changed`, `restructured`, `any`. Exit codes are 0
+(nothing tripped), 1 (the diff could not run) and 2 (a rule tripped). The
+diff itself still goes to stdout, so a failing build shows what moved.
+`action.yml` in the repo root wraps this as a GitHub Action; see
+[the README](../README.md#watch-a-site-from-ci).
 
 Output is grouped into appeared, disappeared, changed (status, content hash,
 title or detected stack), restructured, third-party hosts, and findings.
@@ -100,6 +110,16 @@ requests to URLs nothing linked to, so they're off unless you ask for them.
 - `--max-pages 2000`. If a budget truncates a crawl the summary says so and the
   stored status is `budget-exceeded`.
 - Ctrl-C keeps the partial graph and tags it `interrupted`.
+
+## Benchmarks
+
+```sh
+go test -bench=. -benchmem ./pkg/sitegraph
+```
+
+`BenchmarkBuildGraph` builds a 20,000-page graph (101,000 edges) and reports
+bytes per node alongside the usual figures, which is the number that decides
+how big a crawl fits in memory.
 
 ## Code layout
 

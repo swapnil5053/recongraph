@@ -213,7 +213,7 @@
   <div class="stage">
     <div class="rail" id="rail">
       <div class="wrap head" id="head">
-        <div class="meta">v0.1.2 · Go 1.24+ · MIT</div>
+        <div class="meta">v0.2.0 · Go 1.24+ · MIT</div>
         <h1>A web crawler that maps a site as a graph, not a list.</h1>
         <p>Every page, script, image and external host becomes a node, and every link between them an edge. Each crawl is saved, so you can query it later and diff it against the last one.</p>
         <div class="cta">
@@ -410,6 +410,10 @@ https://example.com/  [200 OK]
       <details>
         <summary>Can I get the graph out?</summary>
         <p>Yes: <code>-f json</code>, <code>adjacency</code>, <code>dot</code>, <code>csv</code>, or <code>html</code> for a self-contained interactive view. <code>svg</code> works if Graphviz is installed.</p>
+      </details>
+      <details>
+        <summary>Can it run as a check in CI?</summary>
+        <p><code>recongraph diff latest~1 latest --fail-on new-external-host,new-secret</code> exits 2 when a rule trips, so a nightly job can fail the build the day your checkout page starts loading a script from a host that wasn't there before. <code>action.yml</code> in the repo wraps that as a GitHub Action: it caches the crawl store between runs and uploads the map as a build artifact.</p>
       </details>
       <details>
         <summary>Does it still work in a pipeline?</summary>
