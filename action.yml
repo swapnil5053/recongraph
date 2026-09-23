@@ -30,11 +30,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # Inputs go through the environment rather than into the script text:
+    # ${{ }} is substituted before bash sees it, so a URL with a quote in it
+    # would otherwise be running as shell.
     - name: Install ReconGraph
       shell: bash
+      env:
+        RG_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        ver='${{ inputs.version }}'
+        ver="$RG_VERSION"
         url="https://github.com/swapnil5053/recongraph/releases/download/$ver/recongraph-$ver-linux-amd64.tar.gz"
         curl -fsSL "$url" -o /tmp/recongraph.tar.gz
         tar -xzf /tmp/recongraph.tar.gz -C /tmp
@@ -53,21 +58,29 @@ runs:
 
     - name: Crawl
       shell: bash
+      env:
+        RG_URL: ${{ inputs.url }}
+        RG_MAX_PAGES: ${{ inputs.max-pages }}
+        RG_RATE: ${{ inputs.rate }}
+        RG_ARGS: ${{ inputs.args }}
       run: |
         set -euo pipefail
-        recongraph crawl -u '${{ inputs.url }}' \
-          --max-pages '${{ inputs.max-pages }}' --rate '${{ inputs.rate }}' \
-          ${{ inputs.args }} -o urls.txt
+        read -ra extra <<< "$RG_ARGS"
+        recongraph crawl -u "$RG_URL" \
+          --max-pages "$RG_MAX_PAGES" --rate "$RG_RATE" \
+          "${extra[@]}" -o urls.txt
 
     - name: Diff against the last crawl
       shell: bash
+      env:
+        RG_FAIL_ON: ${{ inputs.fail-on }}
       run: |
         set -euo pipefail
         if [ "$(recongraph list --count)" -lt 2 ]; then
           echo "First run for this target: nothing to compare against yet."
           exit 0
         fi
-        recongraph diff latest~1 latest --fail-on '${{ inputs.fail-on }}'
+        recongraph diff latest~1 latest --fail-on "$RG_FAIL_ON"
 
     - name: Save the map
       if: always()

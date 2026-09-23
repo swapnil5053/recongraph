@@ -88,8 +88,16 @@ megabytes and a 100,000-page crawl would cost about 70.
 - Profiled with a 20,000-page benchmark (`go test -bench=BuildGraph ./pkg/sitegraph`): swapping the adjacency maps for slices indexed by node ID, dropping the edge-dedup set in favour of scanning a node's own edges, and slicing URLs instead of re-parsing them took the graph from 1,062 to 697 bytes per node and the build from 105ms to 42ms.
 - Design decisions, including reversed ones, are written up as [ADRs](docs/adr/).
 
-## Links
+## Docs
 
-[Usage reference](docs/usage.md) · [Design decisions](docs/adr/) · [Notes on hakrawler](docs/AUDIT-hakrawler.md) · [Project page](https://swapnil5053.github.io/recongraph/)
+| | |
+|---|---|
+| [Usage reference](docs/usage.md) | Every subcommand and flag, benchmarks, code layout |
+| [ADR-0001](docs/adr/0001-recongraph-architecture.md) | Layout, concurrency, the graph model, first storage plan |
+| [ADR-0002](docs/adr/0002-persistence-and-dependencies.md) | Dropping SQLite mid-build; one dependency |
+| [ADR-0003](docs/adr/0003-js-lexer.md) | A lexer rather than regex or a JS parser |
+| [ADR-0004](docs/adr/0004-diff-as-a-ci-check.md) | `diff --fail-on`, exit codes, cached baselines |
+| [Notes on hakrawler](docs/AUDIT-hakrawler.md) | What the original does, four defects, why not fork |
+| [Project page](https://swapnil5053.github.io/recongraph/) | Screens and examples |
 
 ReconGraph began as a rewrite of [hakrawler](https://github.com/hakluke/hakrawler). It keeps the shape of the crawl loop and reading seeds from stdin, but none of the code. Only crawl sites you own or have permission to test. MIT licence.
