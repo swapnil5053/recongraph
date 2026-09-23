@@ -47,9 +47,14 @@ crawl edges.
 
 ## Consequences
 
-It still doesn't follow variables: `const base = "/api"; fetch(base + "/x")`
-finds `/api` as a literal but nothing for the call, since a value with no
-static prefix can't be placed. Doing better means data flow, which is where
-a real parser starts to pay off. Throughput is around 15 MB/s on a minified
-bundle, well above what the rate limiter lets through. A fuzz test
-(`FuzzEndpoints`) guards against panics and hangs on malformed input.
+Throughput is around 15 MB/s on a minified bundle, well above what the rate
+limiter lets through. A fuzz test (`FuzzEndpoints`) guards against panics and
+hangs on malformed input.
+
+One level of constant folding was added afterwards: `name = "literal"`
+bindings are collected first, so `const base = "/api"; fetch(base + "/users")`
+resolves. A name assigned two different literals is dropped rather than
+guessed at. Beyond that it isn't data flow: nothing tracks scope, reassignment
+order, object properties or values that come from a function, and those still
+surface as partials like `/api/users/{}`. Going further means building a real
+AST and a scope chain, which is where a parser starts to earn its dependency.

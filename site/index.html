@@ -213,7 +213,7 @@
   <div class="stage">
     <div class="rail" id="rail">
       <div class="wrap head" id="head">
-        <div class="meta">v0.1.1 · Go 1.24+ · MIT</div>
+        <div class="meta">v0.1.2 · Go 1.24+ · MIT</div>
         <h1>A web crawler that maps a site as a graph, not a list.</h1>
         <p>Every page, script, image and external host becomes a node, and every link between them an edge. Each crawl is saved, so you can query it later and diff it against the last one.</p>
         <div class="cta">
@@ -397,7 +397,7 @@ https://example.com/  [200 OK]
     <div>
       <details open>
         <summary>What doesn't it do?</summary>
-        <p>It doesn't render JavaScript. There's no headless browser, so a single-page app that builds its DOM at runtime comes back as a handful of nodes. Use <a href="https://github.com/projectdiscovery/katana">katana</a> for those. Scripts are tokenised, not executed: it finds URLs passed to <code>fetch()</code>, <code>axios</code> and <code>xhr.open</code>, and API-shaped strings, but it doesn't follow variables, so a URL assembled at runtime shows up only as a partial like <code>/api/users/{}</code>.</p>
+        <p>It doesn't render JavaScript. There's no headless browser, so a single-page app that builds its DOM at runtime comes back as a handful of nodes. Use <a href="https://github.com/projectdiscovery/katana">katana</a> for those. Scripts are tokenised, not executed: it finds URLs passed to <code>fetch()</code>, <code>axios</code> and <code>xhr.open</code>, and API-shaped strings. String constants are folded in, so <code>const base = "/api"; fetch(base + "/users")</code> resolves to <code>/api/users</code>; anything still assembled at runtime is reported as a partial like <code>/api/users/{}</code>.</p>
       </details>
       <details>
         <summary>How hard does it hit a site?</summary>

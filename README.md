@@ -26,7 +26,7 @@ Prebuilt binaries for Windows, macOS and Linux are on the [releases page](https:
 - **Graph model.** Pages, scripts, images, forms and API endpoints are nodes. Links, redirects, script loads and JS calls are typed edges.
 - **Crawl history and diff.** Each crawl is saved as gzipped JSON. `diff` reports pages that appeared, disappeared or changed, and pages that kept their URL and status but changed what they link to or load.
 - **Queries** over the saved graph: hubs, orphans, shortest click path, third-party hosts, connected components, tech stack, status codes.
-- **JavaScript endpoint extraction** with a small lexer instead of regex. Comments, escaped slashes and regex literals don't cause false hits, and URLs built at runtime come back as partials like `/api/users/{}`.
+- **JavaScript endpoint extraction** with a small lexer instead of regex. Comments, escaped slashes and regex literals don't cause false hits; string constants are folded, so `const base = "/api"; fetch(base + "/users")` resolves to `/api/users`; what's still assembled at runtime is reported as a partial like `/api/users/{}`.
 - **Technology fingerprinting** for 64 technologies, per page, with a confidence score and the evidence behind each match.
 - **Passive findings:** emails, cloud storage buckets, secret-shaped strings, internal hostnames.
 - **Exports:** JSON, CSV, Graphviz DOT and SVG, and a self-contained interactive HTML map.
@@ -44,19 +44,22 @@ seeds ─▶ FRONTIER ──tasks──▶ WORKERS (N) ──results──▶ BU
 
 The stages form a cycle of bounded channels, which deadlocks if the frontier ever blocks on a single operation. Its `select` offers the send and the receive together, with a nil channel disabling the send when the queue is empty, so it always drains. The crawl ends when the queue is empty and nothing is in flight, since a `WaitGroup` can't track work that creates more work. Only the builder goroutine writes to the graph, so the graph needs no locks.
 
+## Scope
+
+Crawling is HTTP only: ReconGraph reads what the server sends, and doesn't run
+a headless browser, so a single-page app that builds its DOM at runtime comes
+back thin ([katana](https://github.com/projectdiscovery/katana) covers that
+case). Discovery is limited to what crawling reaches, with no Wayback or
+certificate-transparency lookups, and the graph is held in memory, which the
+`--max-pages` default keeps to single-digit megabytes.
+
 ## Engineering
 
 - One third-party dependency (`golang.org/x/net/html`), no cgo, static binaries for five platforms built by a release workflow.
-- 128 tests and a fuzz target, run under the race detector in CI. The heaviest coverage is on URL canonicalisation, because diff accuracy depends on it.
+- 131 tests and a fuzz target, run under the race detector in CI. The heaviest coverage is on URL canonicalisation, because diff accuracy depends on it.
 - An end-to-end test crawls a test site, changes it, crawls again, and checks the list, query, diff and export output.
 - Crawling two real sites (books.toscrape.com and pypi.org) turned up bugs the unit tests missed, each now covered by a regression test: shared assets outranking pages as hubs, library comments reported as findings, a 300,000-URL sitemap swallowing a 40-page crawl, and `.dev` domains flagged as internal hosts.
 - Design decisions, including reversed ones, are written up as [ADRs](docs/adr/).
-
-## Limitations
-
-- No headless browser, so single-page apps return very little. [katana](https://github.com/projectdiscovery/katana) handles those.
-- JavaScript variables aren't followed: `fetch(base + "/x")` isn't resolved.
-- No passive sources such as Wayback or certificate transparency logs. The graph is held in memory.
 
 ## Links
 
