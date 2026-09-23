@@ -50,7 +50,7 @@ runs:
     # between runs. restore-keys picks up the newest previous cache, because
     # the key itself always misses (it has the run number in it).
     - name: Restore previous crawls
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.recongraph
         key: recongraph-${{ inputs.url }}-${{ github.run_id }}
