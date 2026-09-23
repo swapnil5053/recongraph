@@ -87,6 +87,14 @@ title or detected stack), restructured, third-party hosts, and findings.
 different outbound references. A checkout page that quietly started loading a
 script from a host that wasn't there last month shows up here and nowhere else.
 
+## list
+
+```sh
+recongraph list                  # stored crawls, newest first
+recongraph list --target example.com
+recongraph list --count          # just the number, for scripts
+```
+
 ## fingerprint
 
 ```sh
